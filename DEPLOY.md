@@ -1,14 +1,14 @@
 # Deploy Teras — Supabase + Vercel
 
-##Status sekarang
+## Status sekarang
 - Repo GitHub: https://github.com/yaha2204/teras (branch `main`)
-- Project Supabase sudah ada: `fdurzejhqculuwvylyuuw`
-  - URL: https://fdurzejhqculuwvylyuuw.supabase.co
+- Project Supabase sudah ada: `fdurzejhqculuwvyluuw`
+  - URL: https://fdurzejhqculuwvyluuw.supabase.co
   - Org: `teras`, region Tokyo, plan Free
 - Build lokal `npm run build` ✅ sukses (output `dist/`)
 
 ## 1. Supabase — pasang skema
-1. Buka https://supabase.com/dashboard/project/fdurzejhqculuwvylyuuw/sql
+1. Buka https://supabase.com/dashboard/project/fdurzejhqculuwvyluuw/sql
 2. Klik **+ New query**
 3. Copy seluruh isi `deploy/supabase_schema.sql`
 4. Klik **Run** → harus muncul `Success. No rows returned`
@@ -32,3 +32,7 @@
 `src/apiClient.js` belum di-import oleh `src/main.js`, jadi koneksi Supabase/PostgREST
 **belum dipakai game saat ini** (game masih jalan P2P via PeerJS). Berkas ini disiapkan
 lebih dulu sesuai permintaan; penyambungan client-nya menyusul.
+
+## Deploy status
+- Project Vercel: `teras` (team `teras4`), project ID `prj_VfRc0AEzi5SECgNY9JciKqtU6QOd`
+-
