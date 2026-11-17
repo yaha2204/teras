@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Teras - Virtual Cozy Hangout</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌸</text></svg>">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=20261116tidur1">
+  
+  <!-- Importmap for Three.js ES Modules -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+      }
+    }
+  </script>
+
+  <!-- PeerJS WebRTC Library -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <!-- YouTube IFrame API -->
+  <script src="https://www.youtube.com/iframe_api"></script>
+  <!-- Robust YT-Player standalone library -->
+  <script src="https://unpkg.com/yt-player@3.6.1/dist/yt-player.min.js"></script>
+</head>
+<body>
+  <!-- Canvas 3D Game Viewport -->
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- Top Bar: Room Info & Voice Call HUD -->
+  <header class="top-hud">
+    <div class="hud-card room-badge">
+      <span class="pulse-dot"></span>
+      <span id="roomTitle" class="room-title">Teras Bunga</span>
+      <button id="btnCopyLink" class="icon-btn tooltip" data-tip="Salin Link Kamar">
+        🔗 <span class="btn-text">Undang Teman</span>
+      </button>
+    </div>
+
+    <!-- User Profile & Avatar Icon Pill -->
+    <div class="hud-card profile-badge" id="btnProfileBadge" title="Klik untuk Kustomisasi Avatar">
+      <div class="avatar-ico-frame">
+        <div id="avatarIcoHead" class="avatar-ico-head">
+          <div id="avatarIcoHair" class="avatar-ico-hair"></div>
+          <div class="avatar-ico-eyes"></div>
+          <div class="avatar-ico-blush"></div>
+        </div>
+      </div>
+      <div class="profile-info">
+        <span id="hudPlayerName" class="profile-name">Kamu</span>
+        <span class="profile-sub">🌸 Teras Bunga</span>
+      </div>
+    </div>
+
+    <div class="hud-card voice-badge">
+      <div id="voiceStatus" class="voice-status">Panggilan: Belum Terhubung</div>
+      <div class="voice-actions">
+        <button id="btnMic" class="mic-toggle-btn on" title="Nyalakan / Matikan Mikrofon">
+          <span id="micIcon" class="mic-icon">🎙️</span> <span id="micLabel" class="mic-label">Mic: ON</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Floating Camera Zoom Controls -->
+  <div class="zoom-hud">
+    <button id="btnFullscreen" class="circle-btn" title="Layar Penuh & Landscape">⛶</button>
+    <button id="btnZoomIn" class="circle-btn" title="Perbesar (Zoom In)">🔍+</button>
+    <button id="btnZoomOut" class="circle-btn" title="Perkecil (Zoom Out)">🔍−</button>
+  </div>
+
+  <!-- Floating Boombox / Music HUD -->
+  <aside class="music-hud">
+    <div class="hud-card music-card">
+      <button id="btnToggleMusicModal" class="music-pill">
+        <span class="music-note">🎵</span>
+        <span id="nowPlayingTitle" class="now-playing">Belum ada musik terputar</span>
+      </button>
+      <div class="music-quick-controls">
+        <button id="btnPlayPause" class="mini-icon-btn" title="Play/Pause">▶️</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Sidebar Chat Drawer (Clean, non-intrusive, never blocks the car view!) -->
+  <aside id="chatSidebar" class="chat-sidebar">
+    <div class="chat-sidebar-header">
+      <span>💬 Obrolan Teman</span>
+      <button id="btnToggleChatSidebar" class="mini-icon-btn" title="Tutup / Buka Chat">✕</button>
+    </div>
+    <div id="chatMessagesList" class="chat-messages-container">
+      <div class="chat-msg system">Selamat datang di Teras & Mobil Impian! 🌸</div>
+    </div>
+    <form id="chatForm" class="sidebar-chat-form">
+      <input type="text" id="chatInput" placeholder="Ketik pesan..." autocomplete="off" maxlength="80">
+      <button type="submit" class="sidebar-send-btn">➤</button>
+    </form>
+  </aside>
+
+  <!-- Button to open chat when collapsed -->
+  <button id="btnOpenChatFloating" class="floating-chat-trigger" title="Buka Chat Obrolan">
+    💬 <span id="chatUnreadDot" class="unread-dot hidden"></span>
+  </button>
+
+  <!-- Bottom Navigation & HUD Bar -->
+  <footer class="bottom-hud">
+    <div class="bottom-tools">
+      <button id="btnSwitchRoom" class="pill-btn primary-pill">
+        🏡 <span id="switchRoomText">Masuk ke Rumah</span>
+      </button>
+      <button id="btnDriveCar" class="pill-btn drive-pill">
+        🚗 <span id="driveCarText">Jalan-Jalan Naik Mobil</span>
+      </button>
+      <button id="btnOpenCityMenu" class="pill-btn">
+        📜 Menu Kamar & Join
+      </button>
+      <button id="btnOpenMusicShortcut" class="pill-btn">
+        📻 Putar YouTube
+      </button>
+      <button id="btnCustomize" class="pill-btn">
+        ✨ Ganti Avatar
+      </button>
+    </div>
+  </footer>
+
+  <!-- Floating Driving Mode Controller -->
+  <div id="driveControlsBar" class="drive-hud-controls hidden">
+    <span class="drive-hud-label">Mode Kokpit</span>
+    <button id="btnSwitchDriver" class="drive-action-btn" title="Ganti Siapa yang Menyetir">Sopir: Kamu</button>
+    <button id="btnCarLookLeft" class="drive-action-btn" title="Tengok Kiri">Kiri</button>
+    <button id="btnCarLookCenter" class="drive-action-btn active" title="Depan">Depan</button>
+    <button id="btnCarLookRight" class="drive-action-btn" title="Tengok Kanan">Kanan</button>
+    <button id="btnCarHonk" class="drive-action-btn" title="Klakson Tin-Tin">Tin-Tin</button>
+    <div class="throttle-slider-container" title="Geser untuk mengatur kecepatan gas mobil">
+      <span class="throttle-icon">⚡</span>
+      <input type="range" id="carThrottleSlider" class="throttle-slider" min="0.2" max="2.4" step="0.05" value="0.55">
+      <span id="throttleSpeedLabel" class="throttle-val">55 km/j</span>
+    </div>
+    <button id="btnAutoPilotToggle" class="drive-action-btn active" title="Mode Auto-Pilot / Manual Rusuh">🛡️ Auto-Pilot: ON</button>
+    <button id="btnSirenToggle" class="drive-action-btn" title="Mode Sirine Darurat (Semua Kendaraan Minggir)">🚨 Sirine: OFF</button>
+    <button id="btnDayNightToggle" class="drive-action-btn" title="Ganti Suasana Siang/Malam">☀️ Siang</button>
+    <button id="btnDriveFullscreen" class="drive-action-btn" title="Layar Penuh (Landscape)">⛶ Fullscreen</button>
+    <button id="btnExitCar" class="drive-action-btn" title="Turun & Kembali ke Rumah">Kembali ke Rumah</button>
+  </div>
+
+  <!-- Modal: Room & Join Code Menu (Menggantikan Kota) -->
+  <div id="cityMenuModal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>📜 Menu Kamar & Undangan Teman</h3>
+        <button id="btnCloseCityMenu" class="close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">Ruang teras bunga privat santai berdua untuk ngobrol, voice call, dan mendengarkan musik bersama teman.</p>
+        
+        <!-- Join Code Section -->
+        <label class="form-label">Gabung Kamar Teman (Masukkan Kode / Link):</label>
+        <div class="input-group">
+          <input type="text" id="joinCodeInput" placeholder="Contoh: hangout-abc12 atau link lengkap">
+          <button id="btnSubmitJoinCode" class="primary-btn">Gabung 🔑</button>
+        </div>
+
+        <!-- Current Room Section -->
+        <div class="room-info-box">
+          <span class="room-info-label">Kode Kamar Kamu Saat Ini:</span>
+          <div class="room-code-display">
+            <span id="currentRoomCodeText" class="code-text">#hangout-xxxxx</span>
+            <button id="btnCopyRoomCode" class="secondary-btn">Salin Link 📋</button>
+          </div>
+          <p class="room-tip">Kirimkan link ini ke temanmu agar mereka langsung masuk ke teras bunga bersamamu!</p>
+        </div>
+
+        <!-- Online Friends Status -->
+        <div class="connection-status-card">
+          <span class="status-indicator-dot online"></span>
+          <span id="menuConnectionStatusText">Status Teman: Menunggu teman bergabung...</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Music YouTube Link -->
+  <div id="musicModal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>📻 Putar Musik YouTube Bersama</h3>
+        <button id="btnCloseMusicModal" class="close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">Tempelkan link YouTube apa saja. Musik akan otomatis berputar sinkron di kedua browser!</p>
+        <div class="input-group">
+          <input type="text" id="ytUrlInput" placeholder="https://www.youtube.com/watch?v=... atau https://youtu.be/...">
+          <button id="btnApplyYtUrl" class="primary-btn">Putar Lagu 🎶</button>
+        </div>
+        <div class="music-presets">
+          <span>Rekomendasi Santai (Bebas Embed & Pasti Bunyi):</span>
+          <button class="preset-chip" data-url="https://www.youtube.com/watch?v=TURbeWK2wwg">☕ Lofi Cafe Chill Music</button>
+          <button class="preset-chip" data-url="https://www.youtube.com/watch?v=sjkrrmBnpNQ">🌧️ Lofi Sleep Chill Beats</button>
+          <button class="preset-chip" data-url="https://www.youtube.com/watch?v=WPni755-Krg">🌸 Relaxing Piano & Nature</button>
+          <button class="preset-chip" data-url="https://www.youtube.com/watch?v=lTRiuFIWV54">🎶 Study Peace Instrumental</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Avatar Customization -->
+  <div id="avatarModal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>✨ Kostumisasi Karakter</h3>
+        <button id="btnCloseAvatarModal" class="close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label">Gender / Model Karakter:</label>
+        <div class="gender-picker-row" style="display: flex; gap: 12px; margin-bottom: 12px;">
+          <button type="button" id="btnGenderBoy" class="gender-btn active" style="flex: 1; padding: 10px; border-radius: 12px; border: 2px solid #3a86ff; background: #eef4ff; cursor: pointer; font-weight: 600;">👦 Laki-Laki</button>
+          <button type="button" id="btnGenderGirl" class="gender-btn" style="flex: 1; padding: 10px; border-radius: 12px; border: 2px solid #e5e7eb; background: #ffffff; cursor: pointer; font-weight: 600;">👧 Perempuan</button>
+        </div>
+
+        <label class="form-label">Nama Panggilan:</label>
+        <input type="text" id="playerNameInput" class="text-input" maxlength="15" placeholder="Namamu">
+        
+        <label class="form-label">Warna Baju:</label>
+        <div class="color-picker-row" id="shirtColorOptions"></div>
+
+        <label class="form-label">Warna Rambut:</label>
+        <div class="color-picker-row" id="hairColorOptions"></div>
+
+        <button id="btnSaveAvatar" class="primary-btn" style="margin-top: 16px;">Simpan Tampilan 💖</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pure HTML5 Audio Player for Car & Terrace (No Video, No IFrame Block!) -->
+  <audio id="directAudioPlayer" preload="auto" playsinline></audio>
+
+  <!-- Floating Car / Terrace Music Bar -->
+  <div id="floatingMusicBar" class="floating-audio-bar hidden">
+    <div class="audio-bar-content">
+      <span class="audio-bar-icon">📻</span>
+      <div class="audio-bar-text">
+        <span id="audioBarTitle" class="audio-bar-name">Memutar Audio YouTube...</span>
+        <span id="audioBarArtist" class="audio-bar-sub">Audio Stream Langsung</span>
+      </div>
+      <div class="audio-bar-actions">
+        <button id="btnFloatingPlayPause" class="mini-icon-btn">⏸️</button>
+        <button id="btnFloatingOpenModal" class="mini-icon-btn">🔍</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Remote Peer Voice Audio Element -->
+  <audio id="remoteAudio" autoplay playsinline></audio>
+
+  <!-- Notification Toast -->
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- Main JS Logic -->
+  <script type="module" src="src/main.js?v=20261116tidur1"></script>
+</body>
+</html>

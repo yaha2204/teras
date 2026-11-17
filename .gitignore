@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+.npm/
+
+# Media recordings & test screenshots (Keep repo super lightweight)
+*.png
+*.jpg
+*.jpeg
+*.mp4
+*.webm
+videos/
+videos_*/
+
+# OS & Temp
+.DS_Store
+Thumbs.db
+*.log
+.env
+.env.local
