@@ -29,10 +29,17 @@
 6. Deploy
 
 ## Catatan penting
-`src/apiClient.js` belum di-import oleh `src/main.js`, jadi koneksi Supabase/PostgREST
-**belum dipakai game saat ini** (game masih jalan P2P via PeerJS). Berkas ini disiapkan
-lebih dulu sesuai permintaan; penyambungan client-nya menyusul.
+`src/apiClient.js` sekarang sudah di-import oleh `src/main.js`. Client dipakai untuk
+mendaftarkan room dan menyinkronkan state (scene, musik, siren) secara fire-and-forget.
+Game tetap berjalan P2P via PeerJS — kegagalan backend tidak menghentikan permainan.
+Mode lokal (PostgREST) diprioritaskan, fallback ke Supabase untuk baca room publik.
 
-## Deploy status
-- Project Vercel: `teras` (team `teras4`), project ID `prj_VfRc0AEzi5SECgNY9JciKqtU6QOd`
--
+## Deploy status (selesai)
+- Supabase: ref `fdurzejhqculuwvyluuw` (region Tokyo), schema `deploy/supabase_schema.sql`
+  sudah dijalankan → tabel `accounts`, `rooms`, `room_players`, view `public_rooms`.
+- Vercel: project `teras` (team `teras4`), ID `prj_VfRc0AEzi5SECgNY9JciKqtU6QOd`.
+- Production URL: https://teras-2nj6nsil3-teras4.vercel.app
+- Deployment: `dpl_DXrRV427XfVSkiVudKHwmfHZFSpv` — **READY**.
+- Environment variables terpasang: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`,
+  `VITE_DB_LOCAL_URL`, `VITE_YAPI_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
+- SSO/deployment protection dimatikan agar situs bisa diakses publik.
