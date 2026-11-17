@@ -4,6 +4,11 @@
 import { Engine3D } from './engine3d.js?v=20261116tidur1';
 import { NetworkManager } from './network.js?v=20261116tidur1';
 import { PureAudioController, parseYouTubeVideoId } from './audioController.js?v=20261116tidur1';
+import { ThaloriaApiClient } from './apiClient.js?v=20261116tidur1';
+
+// apiClient.js membaca global ini — petakan dari env Vite (Vercel) atau script injection.
+window.__SUPABASE_URL = window.__SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL || '';
+window.__SUPABASE_ANON_KEY = window.__SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
 // Setup or Retrieve Room Hash
 function getOrCreateRoomId() {
@@ -57,6 +62,15 @@ window.addEventListener('DOMContentLoaded', () => {
   const roomId = getOrCreateRoomId();
   const profile = loadProfile();
 
+  // Database client: lokal dulu, fallback Supabase. Semua pemanggilan bersifat
+  // fire-and-forget supaya game tetap jalan walau backend tidak tersedia.
+  const apiClient = new ThaloriaApiClient({
+    localUrl: import.meta.env.VITE_DB_LOCAL_URL || undefined,
+    supabaseUrl: window.__SUPABASE_URL,
+    supabaseKey: window.__SUPABASE_ANON_KEY
+  });
+  window.terasApi = apiClient;
+
   // Update Room Header
   const roomTitleEl = document.getElementById('roomTitle');
   if (roomTitleEl) roomTitleEl.textContent = '#' + roomId;
@@ -83,7 +97,39 @@ window.addEventListener('DOMContentLoaded', () => {
       videoId: trackId,
       time: currentTime
     });
+    syncRoomState();
   });
+
+  // --- Sinkronisasi state ruangan ke backend (fire-and-forget) ---
+  function readMusicState() {
+    if (!audioController.currentTrackId) return { videoId: '', action: 'pause', time: 0 };
+    return {
+      action: audioController.isPlaying ? 'PLAY' : 'PAUSE',
+      videoId: audioController.currentTrackId,
+      time: audioController.audioElement ? audioController.audioElement.currentTime : 0
+    };
+  }
+
+  let roomSyncTimer = null;
+  function syncRoomState() {
+    if (!apiClient || apiClient.activeMode === 'offline' || apiClient.activeMode === 'probing') return;
+    clearTimeout(roomSyncTimer);
+    roomSyncTimer = setTimeout(() => {
+      const sirenBtn = document.getElementById('btnSirenToggle');
+      Promise.resolve(apiClient.updateRoomState(roomId, {
+        current_scene: engine.currentSceneName || 'terrace',
+        music_state: readMusicState(),
+        siren_mode: !!(sirenBtn && sirenBtn.classList.contains('active'))
+      })).catch(() => {});
+    }, 250);
+  }
+
+  // Daftarkan ruangan ke backend bila tersedia (diabaikan kalau gagal).
+  Promise.resolve(apiClient.createRoom({
+    roomCode: roomId,
+    roomName: `${profile.name}'s Teras`,
+    initialScene: 'terrace'
+  })).then(syncRoomState).catch(() => {});
 
   // Connection status element in Menu
   const menuConnectionStatusText = document.getElementById('menuConnectionStatusText');
@@ -233,6 +279,8 @@ window.addEventListener('DOMContentLoaded', () => {
   const btnDriveCar = document.getElementById('btnDriveCar');
 
   engine.onSceneChange = (scene) => {
+    syncRoomState();
+
     if (switchRoomText) {
       if (scene === 'terrace') switchRoomText.textContent = 'Masuk ke Rumah';
       else if (scene === 'interior') switchRoomText.textContent = 'Keluar ke Teras';
@@ -345,6 +393,7 @@ window.addEventListener('DOMContentLoaded', () => {
         type: 'SIREN_TOGGLE',
         enabled: isSiren
       });
+      syncRoomState();
     });
   }
 

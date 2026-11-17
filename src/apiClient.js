@@ -51,9 +51,13 @@ export class ThaloriaApiClient {
     }
   }
 
-  getHeaders() {
+  getHeaders(useAnonKey = false) {
     const headers = { 'Content-Type': 'application/json' };
-    if (this.token) {
+    if (useAnonKey) {
+      // PostgREST / Supabase Auth menerima kunci anon sebagai apikey + Bearer.
+      headers['apikey'] = this.supabaseKey;
+      headers['Authorization'] = `Bearer ${this.token || this.supabaseKey}`;
+    } else if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
     return headers;
@@ -119,9 +123,12 @@ export class ThaloriaApiClient {
       return await res.json();
     }
 
-    // Cloud fallback
+    // Cloud fallback: RLS hanya mengizinkan anon membaca room publik.
+    // Penulisan harus lewat endpoint service_role (Vercel function), jadi di sini
+    // kita kembalikan room lokal untuk dipakai UI tanpa menyimpan ke Supabase.
     return {
       success: true,
+      persisted: false,
       room: {
         room_code: params.roomCode || `RM-${Math.floor(1000 + Math.random() * 9000)}`,
         room_name: params.roomName || 'Villa Hangout Cloud',
@@ -139,7 +146,48 @@ export class ThaloriaApiClient {
       return await res.json();
     }
 
+    if (this.activeMode === 'supabase') {
+      try {
+        const cols = 'room_code,room_name,current_scene,music_state,siren_mode,is_private,max_players,updated_at';
+        const res = await fetch(
+          `${this.supabaseUrl}/rest/v1/rooms?room_code=eq.${encodeURIComponent(roomCode)}&select=${cols}`,
+          { headers: this.getHeaders(true) }
+        );
+        const rows = await res.json();
+        if (!res.ok) return { success: false, error: rows.message || 'Gagal membaca Supabase' };
+        return { success: true, room: rows[0] || null };
+      } catch (err) {
+        return { success: false, error: String(err) };
+      }
+    }
+
     return { success: false, error: 'Server lokal tidak tersedia' };
+  }
+
+  // 5b. DAFTAR ROOM PUBLIK (via view aman, tanpa password/passcode)
+  async listRooms(limit = 20) {
+    await this.probeBackend();
+
+    if (this.activeMode === 'local') {
+      const res = await fetch(`${this.localUrl}/api/rooms`);
+      return await res.json();
+    }
+
+    if (this.activeMode === 'supabase') {
+      try {
+        const res = await fetch(
+          `${this.supabaseUrl}/rest/v1/public_rooms?select=*&order=created_at.desc&limit=${Number(limit) || 20}`,
+          { headers: this.getHeaders(true) }
+        );
+        const rows = await res.json();
+        if (!res.ok) return { success: false, error: rows.message || 'Gagal membaca Supabase' };
+        return { success: true, rooms: rows };
+      } catch (err) {
+        return { success: false, error: String(err) };
+      }
+    }
+
+    return { success: false, rooms: [], error: 'Backend tidak tersedia' };
   }
 
   // 5. UPDATE ROOM STATE (Scene, Music, Siren)
