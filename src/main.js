@@ -72,19 +72,6 @@ window.addEventListener('DOMContentLoaded', () => {
   });
   window.terasApi = apiClient;
 
-  // Wajib punya akun sebelum bisa daftar / gabung ke teras.
-  initAuthGate(apiClient, (user) => {
-    if (!user) return;
-    const displayName = user.displayName || user.username;
-    profile.name = displayName;
-    engine.localPlayer.name = displayName;
-    engine.updateAvatarAppearance(engine.localPlayer);
-    saveProfile(profile);
-    const hudName = document.getElementById('hudPlayerName');
-    if (hudName) hudName.textContent = displayName;
-    showToast(`Selamat datang, ${displayName}! 🌸`);
-  });
-
   // Update Room Header
   const roomTitleEl = document.getElementById('roomTitle');
   if (roomTitleEl) roomTitleEl.textContent = '#' + roomId;
@@ -101,6 +88,20 @@ window.addEventListener('DOMContentLoaded', () => {
   engine.localPlayer.shirtColor = profile.shirtColor;
   engine.localPlayer.hairColor = profile.hairColor;
   engine.updateAvatarAppearance(engine.localPlayer);
+
+  // Wajib punya akun sebelum bisa daftar / gabung ke teras.
+  // Dipanggil setelah engine siap supaya callback profil aman.
+  initAuthGate(apiClient, (user) => {
+    if (!user) return;
+    const displayName = user.displayName || user.username;
+    profile.name = displayName;
+    engine.localPlayer.name = displayName;
+    engine.updateAvatarAppearance(engine.localPlayer);
+    saveProfile(profile);
+    const hudName = document.getElementById('hudPlayerName');
+    if (hudName) hudName.textContent = displayName;
+    showToast(`Selamat datang, ${displayName}! 🌸`);
+  });
 
   // Initialize Pure Audio Controller (No Video, No Iframe Blocks!)
   const audioController = new PureAudioController((action, trackId, currentTime) => {
