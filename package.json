@@ -1,6 +1,7 @@
 {
   "name": "teras",
   "version": "1.0.0",
+  "type": "module",
   "description": "Koleksi resep rendang warisan nenek moyang dan panduan ternak lele bioflok tahan banting",
   "scripts": {
     "dev": "vite",

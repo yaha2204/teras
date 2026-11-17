@@ -123,12 +123,25 @@ export class PureAudioController {
     this.currentTitle = `Lagu (${videoId})`;
     this.persistState();
 
-    // 1. Try public audio stream proxy
+    // 1. Primary: High-speed local yt-dlp resolver via Cloudflare Tunnel (yapi.styna.my.id)
     const streamUrls = [
+      `https://yapi.styna.my.id/api/stream?v=${videoId}`,
       `https://yt.chocolatemoo53.com/latest_version?id=${videoId}&itag=140`,
-      `https://invidious.jing.rocks/latest_version?id=${videoId}&itag=140`,
       `https://invidious.nerdvpn.de/latest_version?id=${videoId}&itag=140`
     ];
+
+    // Fetch real song title asynchronously from yapi
+    fetch(`https://yapi.styna.my.id/api/info?v=${videoId}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.title) {
+          this.currentTitle = data.title;
+          const barTitle = document.getElementById('audioBarTitle');
+          if (barTitle) barTitle.textContent = data.title;
+          this.persistState();
+        }
+      })
+      .catch(() => {});
 
     let loaded = false;
     if (this.audioElement) {
