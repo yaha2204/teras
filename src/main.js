@@ -5,6 +5,7 @@ import { Engine3D } from './engine3d.js?v=20261116tidur1';
 import { NetworkManager } from './network.js?v=20261116tidur1';
 import { PureAudioController, parseYouTubeVideoId } from './audioController.js?v=20261116tidur1';
 import { ThaloriaApiClient } from './apiClient.js?v=20261116tidur1';
+import { initAuthGate } from './authGate.js?v=20261118akun1';
 
 // apiClient.js membaca global ini — petakan dari env Vite (Vercel) atau script injection.
 window.__SUPABASE_URL = window.__SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL || '';
@@ -70,6 +71,19 @@ window.addEventListener('DOMContentLoaded', () => {
     supabaseKey: window.__SUPABASE_ANON_KEY
   });
   window.terasApi = apiClient;
+
+  // Wajib punya akun sebelum bisa daftar / gabung ke teras.
+  initAuthGate(apiClient, (user) => {
+    if (!user) return;
+    const displayName = user.displayName || user.username;
+    profile.name = displayName;
+    engine.localPlayer.name = displayName;
+    engine.updateAvatarAppearance(engine.localPlayer);
+    saveProfile(profile);
+    const hudName = document.getElementById('hudPlayerName');
+    if (hudName) hudName.textContent = displayName;
+    showToast(`Selamat datang, ${displayName}! 🌸`);
+  });
 
   // Update Room Header
   const roomTitleEl = document.getElementById('roomTitle');

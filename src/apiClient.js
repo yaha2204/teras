@@ -13,6 +13,10 @@ export class ThaloriaApiClient {
     this.supabaseUrl = options.supabaseUrl || window.__SUPABASE_URL || '';
     this.supabaseKey = options.supabaseKey || window.__SUPABASE_ANON_KEY || '';
 
+    // Auth selalu lewat endpoint serverless same-origin (/api/auth/*) yang
+    // memakai service_role — anon key tidak boleh menulis ke tabel accounts.
+    this.authUrl = options.authUrl !== undefined ? options.authUrl : '';
+
     this.activeMode = 'probing'; // 'local' | 'supabase' | 'probing'
     this.token = localStorage.getItem('thaloria_jwt_token') || null;
     this.currentUser = JSON.parse(localStorage.getItem('thaloria_user_profile') || 'null');
@@ -63,51 +67,64 @@ export class ThaloriaApiClient {
     return headers;
   }
 
+  _saveSession(data) {
+    if (data && data.success && data.token) {
+      this.token = data.token;
+      this.currentUser = data.user;
+      localStorage.setItem('thaloria_jwt_token', data.token);
+      localStorage.setItem('thaloria_user_profile', JSON.stringify(data.user));
+    }
+    return data;
+  }
+
+  async _authFetch(path, options = {}) {
+    try {
+      const res = await fetch(`${this.authUrl}/api/auth/${path}`, {
+        method: options.method || 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.token && path !== 'login' ? { Authorization: `Bearer ${this.token}` } : {})
+        },
+        body: options.body ? JSON.stringify(options.body) : undefined
+      });
+      return await res.json();
+    } catch (err) {
+      return { success: false, error: 'Tidak bisa terhubung ke server akun' };
+    }
+  }
+
   // 1. REGISTER ACCOUNT
   async register(username, password, displayName, avatarData) {
-    await this.probeBackend();
-
-    if (this.activeMode === 'local') {
-      const res = await fetch(`${this.localUrl}/api/auth/register`, {
-        method: 'POST',
-        headers: this.getHeaders(),
-        body: JSON.stringify({ username, password, displayName, avatarData })
-      });
-      const data = await res.json();
-      if (data.success && data.token) {
-        this.token = data.token;
-        this.currentUser = data.user;
-        localStorage.setItem('thaloria_jwt_token', data.token);
-        localStorage.setItem('thaloria_user_profile', JSON.stringify(data.user));
-      }
-      return data;
-    }
-
-    // Fallback: Supabase direct registration
-    return { success: false, error: 'Pendaftaran cloud langsung memerlukan konfigurasi Supabase Auth' };
+    return this._saveSession(await this._authFetch('register', {
+      body: { username, password, displayName, avatarData }
+    }));
   }
 
   // 2. LOGIN ACCOUNT
   async login(username, password) {
-    await this.probeBackend();
+    return this._saveSession(await this._authFetch('login', {
+      body: { username, password }
+    }));
+  }
 
-    if (this.activeMode === 'local') {
-      const res = await fetch(`${this.localUrl}/api/auth/login`, {
-        method: 'POST',
-        headers: this.getHeaders(),
-        body: JSON.stringify({ username, password })
-      });
-      const data = await res.json();
-      if (data.success && data.token) {
-        this.token = data.token;
-        this.currentUser = data.user;
-        localStorage.setItem('thaloria_jwt_token', data.token);
-        localStorage.setItem('thaloria_user_profile', JSON.stringify(data.user));
-      }
-      return data;
+  // 2b. CEK SESI
+  async me() {
+    if (!this.token) return { success: false, error: 'Belum login' };
+    const data = await this._authFetch('me', { method: 'GET' });
+    if (data.success && data.user) {
+      this.currentUser = data.user;
+      localStorage.setItem('thaloria_user_profile', JSON.stringify(data.user));
+    } else {
+      this.logout();
     }
+    return data;
+  }
 
-    return { success: false, error: 'Server lokal tidak aktif dan Supabase Auth belum dikonfigurasi' };
+  logout() {
+    this.token = null;
+    this.currentUser = null;
+    localStorage.removeItem('thaloria_jwt_token');
+    localStorage.removeItem('thaloria_user_profile');
   }
 
   // 3. CREATE ROOM

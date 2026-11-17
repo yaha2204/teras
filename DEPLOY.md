@@ -34,12 +34,28 @@ mendaftarkan room dan menyinkronkan state (scene, musik, siren) secara fire-and-
 Game tetap berjalan P2P via PeerJS — kegagalan backend tidak menghentikan permainan.
 Mode lokal (PostgREST) diprioritaskan, fallback ke Supabase untuk baca room publik.
 
+## Akun wajib sebelum gabung (auth gate)
+Layar **Buat Akun / Masuk** muncul saat aplikasi dibuka — user harus punya akun
+dulu sebelum bisa daftar/gabung ke teras.
+
+- Endpoint serverless: `/api/auth/register`, `/api/auth/login`, `/api/auth/me`
+  (file `api/auth/*.js`, helper `api/_auth.js` — diabaikan sebagai function oleh Vercel).
+- Password di-hash dengan `scrypt` + salt acak (Node `crypto`, tanpa dependency).
+- Token sesi HMAC-SHA256 (30 hari) disimpan di `localStorage` (`thaloria_jwt_token`).
+- Semua query tabel `accounts` memakai `SUPABASE_SERVICE_ROLE_KEY` karena RLS
+  hanya mengizinkan anon **read**.
+- `src/authGate.js` mengatur UI gate; `src/apiClient.js` memanggil endpoint
+  same-origin `/api/auth/*` (Vercel) atau proxy Vite → backend lokal saat development.
+
+Alur uji lokal (register duplikat → 409, password salah → 401, `/me` → 200) lolos.
+
 ## Deploy status (selesai)
 - Supabase: ref `fdurzejhqculuwvyluuw` (region Tokyo), schema `deploy/supabase_schema.sql`
   sudah dijalankan → tabel `accounts`, `rooms`, `room_players`, view `public_rooms`.
 - Vercel: project `teras` (team `teras4`), ID `prj_VfRc0AEzi5SECgNY9JciKqtU6QOd`.
-- Production URL: https://teras-2nj6nsil3-teras4.vercel.app
-- Deployment: `dpl_DXrRV427XfVSkiVudKHwmfHZFSpv` — **READY**.
+- Production URL: https://teras-teras4.vercel.app
 - Environment variables terpasang: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`,
   `VITE_DB_LOCAL_URL`, `VITE_YAPI_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
 - SSO/deployment protection dimatikan agar situs bisa diakses publik.
+
+Setiap push ke `main` otomatis di-deploy oleh Vercel (git deployment aktif).

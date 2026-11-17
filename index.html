@@ -33,6 +33,45 @@
   <!-- Canvas 3D Game Viewport -->
   <canvas id="gameCanvas"></canvas>
 
+  <!-- Auth Gate: wajib punya akun sebelum masuk / daftar ke teras -->
+  <div id="authOverlay" class="auth-overlay hidden">
+    <div class="auth-card">
+      <div class="auth-brand">
+        <div class="auth-flower">🌸</div>
+        <h1>Teras Bunga</h1>
+        <p>Buat akun dulu sebelum gabung ke teras 🌸</p>
+      </div>
+
+      <div class="auth-tabs">
+        <button type="button" id="authTabRegister" class="auth-tab active">✨ Buat Akun</button>
+        <button type="button" id="authTabLogin" class="auth-tab">🔑 Masuk</button>
+      </div>
+
+      <form id="authForm" autocomplete="on">
+        <label class="form-label" id="authDisplayNameRow">
+          Nama Panggilan
+          <input type="text" id="authDisplayName" class="text-input" maxlength="50" placeholder="Nama yang dipakai di teras" autocomplete="nickname">
+        </label>
+
+        <label class="form-label">
+          Username
+          <input type="text" id="authUsername" class="text-input" maxlength="30" placeholder="3–30 huruf/angka/underscore" autocomplete="username" required>
+        </label>
+
+        <label class="form-label">
+          Password
+          <input type="password" id="authPassword" class="text-input" maxlength="100" placeholder="Minimal 6 karakter" autocomplete="current-password" required>
+        </label>
+
+        <p id="authError" class="auth-error hidden"></p>
+
+        <button type="submit" id="authSubmit" class="primary-btn auth-submit">Buat Akun & Masuk 🌸</button>
+      </form>
+
+      <p class="auth-footnote">🔒 Akun tersimpan aman di Supabase</p>
+    </div>
+  </div>
+
   <!-- Top Bar: Room Info & Voice Call HUD -->
   <header class="top-hud">
     <div class="hud-card room-badge">

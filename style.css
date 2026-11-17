@@ -425,6 +425,133 @@ body, html {
   background: var(--accent-warm-hover);
 }
 
+/* Auth gate (wajib akun sebelum masuk teras) */
+.auth-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: linear-gradient(160deg, rgba(245, 239, 230, 0.96), rgba(233, 240, 232, 0.96));
+  backdrop-filter: blur(10px);
+  overflow-y: auto;
+}
+
+.auth-overlay.hidden {
+  display: none;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-float);
+  padding: 26px 24px 20px;
+  text-align: center;
+}
+
+.auth-flower {
+  font-size: 42px;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+
+.auth-brand h1 {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--ink-primary);
+  margin-bottom: 5px;
+}
+
+.auth-brand p {
+  font-size: 13px;
+  color: var(--ink-secondary);
+  margin-bottom: 18px;
+  line-height: 1.5;
+}
+
+.auth-tabs {
+  display: flex;
+  gap: 6px;
+  background: var(--bg-sand);
+  border-radius: var(--radius-pill);
+  padding: 4px;
+  margin-bottom: 18px;
+}
+
+.auth-tab {
+  flex: 1;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-pill);
+  padding: 9px 8px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-secondary);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.auth-tab.active {
+  background: #ffffff;
+  color: var(--accent-warm);
+  box-shadow: var(--shadow-subtle);
+}
+
+#authForm .form-label {
+  display: block;
+  text-align: left;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink-secondary);
+  margin-bottom: 12px;
+}
+
+#authForm .text-input {
+  margin-top: 6px;
+  margin-bottom: 0;
+  user-select: text;
+}
+
+.auth-error {
+  background: #fff1ec;
+  color: #b23a1c;
+  border: 1px solid #ffd6c7;
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  margin-bottom: 12px;
+  text-align: left;
+}
+
+.auth-error.hidden {
+  display: none;
+}
+
+.auth-submit {
+  width: 100%;
+  padding: 12px;
+  font-size: 15px;
+  margin-top: 4px;
+}
+
+.auth-submit:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.auth-footnote {
+  font-size: 11.5px;
+  color: var(--ink-muted);
+  margin-top: 14px;
+}
+
 /* Modals */
 .modal-overlay {
   position: fixed;
