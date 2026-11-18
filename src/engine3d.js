@@ -639,11 +639,14 @@ export class Engine3D {
 
     this.renderer = new THREE.WebGLRenderer({
       canvas: this.canvas,
-      antialias: false,
+      antialias: true,
       powerPreference: 'high-performance'
     });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.setPixelRatio(1.0);
+    // Render mengikuti kerapatan layar (Retina/HP) — dibatasi supaya tetap lancar.
+    const mobileScreen = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
+    const maxPixelRatio = mobileScreen ? 1.5 : 2;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxPixelRatio));
     this.renderer.shadowMap.enabled = false;
 
     // Camera setup
@@ -994,6 +997,8 @@ export class Engine3D {
 
   onResize() {
     this.updateCameraFrustum();
+    const mobile = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, mobile ? 1.5 : 2));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
   }
 
