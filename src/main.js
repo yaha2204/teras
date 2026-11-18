@@ -281,6 +281,8 @@ window.addEventListener('DOMContentLoaded', () => {
           engine.carSteerX = data.carSteerX;
           if (data.speed) {
             engine.driveSpeed = data.speed;
+            engine.speedLimit = data.speed;
+            if (carThrottleSlider) carThrottleSlider.value = data.speed;
             if (engine.onSpeedChange) engine.onSpeedChange(data.speed);
           }
         }
@@ -433,14 +435,15 @@ window.addEventListener('DOMContentLoaded', () => {
   if (carThrottleSlider) {
     carThrottleSlider.addEventListener('input', (e) => {
       if (!isLocalDriver()) {
-        e.target.value = engine.driveSpeed;
+        e.target.value = engine.speedLimit;
         notifyPassenger();
         return;
       }
       const val = parseFloat(e.target.value);
-      engine.driveSpeed = val;
-      const kmh = Math.round(val * 100);
-      if (throttleSpeedLabel) throttleSpeedLabel.textContent = `${kmh} km/j`;
+      engine.setSpeedLimit(val);
+      if (throttleSpeedLabel) {
+        throttleSpeedLabel.textContent = `${Math.round(engine.speedLimit * 100)} km/j`;
+      }
 
       // Broadcast throttle speed to companion
       network.broadcast({
@@ -452,11 +455,14 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Update slider UI when speed changes dynamically
-  const origAnimate = engine.animate;
+  // Label menampilkan kecepatan aktual + batas yang diset user.
+  // Slider sengaja TIDAK diubah di sini supaya limit tidak turun sendiri.
   engine.onSpeedChange = (speed) => {
-    if (carThrottleSlider) carThrottleSlider.value = speed;
-    if (throttleSpeedLabel) throttleSpeedLabel.textContent = `${Math.round(speed * 100)} km/j`;
+    if (!throttleSpeedLabel) return;
+    const limit = engine.speedLimit;
+    throttleSpeedLabel.textContent = Math.abs(limit - speed) > 0.01
+      ? `${Math.round(speed * 100)} / ${Math.round(limit * 100)} km/j`
+      : `${Math.round(speed * 100)} km/j`;
   };
 
   // Wire Auto-Pilot & Day/Night Toggles
@@ -588,11 +594,11 @@ window.addEventListener('DOMContentLoaded', () => {
 
     if (carThrottleSlider) {
       carThrottleSlider.disabled = !mine;
-      carThrottleSlider.value = engine.driveSpeed;
+      carThrottleSlider.value = engine.speedLimit;
     }
     if (throttleSpeedLabel) {
       throttleSpeedLabel.textContent = mine
-        ? `${Math.round(engine.driveSpeed * 100)} km/j`
+        ? `${Math.round(engine.speedLimit * 100)} km/j`
         : 'Menunggu giliran';
     }
     [btnAutoPilotToggle, btnSirenToggle].forEach((button) => {
@@ -680,15 +686,16 @@ window.addEventListener('DOMContentLoaded', () => {
     btnCarSpeed.addEventListener('click', () => {
       speedTier = (speedTier + 1) % 3;
       if (speedTier === 0) {
-        engine.driveSpeed = 0.35;
+        engine.setSpeedLimit(0.35);
         btnCarSpeed.textContent = '⚡ Pelan (20 km/h)';
       } else if (speedTier === 1) {
-        engine.driveSpeed = 0.65;
+        engine.setSpeedLimit(0.65);
         btnCarSpeed.textContent = '⚡ Santai (45 km/h)';
       } else {
-        engine.driveSpeed = 1.05;
+        engine.setSpeedLimit(1.05);
         btnCarSpeed.textContent = '⚡ Cepat (70 km/h)';
       }
+      if (carThrottleSlider) carThrottleSlider.value = engine.speedLimit;
     });
   }
 

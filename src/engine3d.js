@@ -703,7 +703,8 @@ export class Engine3D {
     this.driveGroup.visible = false;
 
     // Driving physics state
-    this.driveSpeed = 0.55; // cruising speed
+    this.driveSpeed = 0.55; // kecepatan aktual saat ini
+    this.speedLimit = 0.55; // batas gas yang diset user — tidak diturunkan auto-pilot
     this.isDriving = false;
     this.carSteerX = 0; // road lane steering (-2.0 to 2.0)
     this.carVelocityX = 0; // Smooth physical lateral momentum (no lag, no jerk!)
@@ -861,6 +862,16 @@ export class Engine3D {
     this.setZoom(this.currentZoom + 0.25);
   }
 
+  /** Batas kecepatan dari slider gas. Auto-pilot hanya menuju ke sini, tidak pernah
+   *  menurunkan nilai ini gara-gara ada rintangan. */
+  setSpeedLimit(value) {
+    const next = Math.max(0.2, Math.min(2.4, Number(value) || 0.55));
+    this.speedLimit = next;
+    // Mode manual langsung merespons slider; auto-pilot pelan-pelan menuju limit.
+    if (!this.isAutoPilot) this.driveSpeed = next;
+    if (this.onSpeedChange) this.onSpeedChange(this.driveSpeed);
+  }
+
   setDriverRole(role) {
     this.driverRole = role;
     if (this.steeringWheelGroup) {
@@ -925,8 +936,18 @@ export class Engine3D {
    * dengan karakter di teras). `peerProfile` dipakai saat teman ikut naik mobil.
    */
   syncCarCompanion(peerProfile = null) {
-    const p = peerProfile || this.carPeerProfile || this.localPlayer;
-    if (!p) return;
+    if (!this.companionGroup) return;
+    const p = peerProfile || this.carPeerProfile || null;
+
+    // Teman belum join → kursi penumpang KOSONG. Jangan tampilkan kloning
+    // karakter lokal di sebelah pengemudi.
+    if (!p) {
+      this.companionGroup.visible = false;
+      this.compKikoController = null;
+      return;
+    }
+
+    this.companionGroup.visible = true;
     const gender = (p.gender === 'girl' || p.gender === 'cewe') ? 'cewe' : 'cowo';
     this.updateCompanionAppearance(p.hairColor, p.shirtColor, gender);
   }
@@ -4065,14 +4086,8 @@ export class Engine3D {
         if (this.keysHeld && isActiveDriver) {
           if (this.keysHeld.left) inputX -= 1;
           if (this.keysHeld.right) inputX += 1;
-          if (this.keysHeld.up) {
-            this.driveSpeed = Math.min(2.4, this.driveSpeed + 0.6 * dt);
-            if (this.onSpeedChange) this.onSpeedChange(this.driveSpeed);
-          }
-          if (this.keysHeld.down) {
-            this.driveSpeed = Math.max(0.2, this.driveSpeed - 0.6 * dt);
-            if (this.onSpeedChange) this.onSpeedChange(this.driveSpeed);
-          }
+          if (this.keysHeld.up) this.setSpeedLimit(this.speedLimit + 0.6 * dt);
+          if (this.keysHeld.down) this.setSpeedLimit(this.speedLimit - 0.6 * dt);
         }
 
         if (this.getTouchSteerDir && isActiveDriver) {
@@ -4123,6 +4138,35 @@ export class Engine3D {
       const carActualX = this.driveCar ? this.driveCar.position.x : 0;
       const roadHalfWidth = 5.5;
 
+      // Auto-pilot mencari jalur kosong LEBIH AWAL. Kecepatan tidak pernah
+      // dikurangi karena rintangan — setelah lewat, gas kembali ke limit user.
+      let autoEvadeX = null;
+      if (this.isAutoPilot && this.driverRole === 'local') {
+        const lanes = [-4.2, -2.1, 0, 2.1, 4.2];
+        const aheadOfUs = (o) => {
+          const dz = o.z - 3.8;
+          return dz < 2 && dz > -40;
+        };
+        const laneIsBlocked = (x) => this.trafficList.some((o) =>
+          aheadOfUs(o) && Math.abs(o.group.position.x - x) < 1.75
+        );
+        const threats = this.trafficList.filter((o) =>
+          aheadOfUs(o) && Math.abs(o.group.position.x - carActualX) < 2.1
+        );
+
+        if (threats.length) {
+          const obstacleX = threats.sort((a, b) => b.z - a.z)[0].group.position.x;
+          const candidates = lanes.filter((x) => Math.abs(x - carActualX) > 0.85);
+          const clear = candidates.filter((x) => !laneIsBlocked(x));
+          const pool = clear.length ? clear : candidates;
+          const score = (x) => Math.abs(x - carActualX)
+            + (clear.includes(x) ? 0 : 4)
+            + (Math.sign(x - carActualX) === Math.sign(obstacleX - carActualX) ? 3 : 0);
+          pool.sort((a, b) => score(a) - score(b));
+          autoEvadeX = pool[0] ?? null;
+        }
+      }
+
       for (const t of this.trafficList) {
         if (!t.isBounced) {
           // Relative movement towards camera
@@ -4155,32 +4199,10 @@ export class Engine3D {
           const distZ = t.z - 3.8; // negative means vehicle is ahead of player
           const distX = Math.abs(t.group.position.x - carActualX);
 
-          // 1. AUTO-PILOT / GUARD MODE: Active radar braking & emergency evasion!
-          if (this.isAutoPilot && this.driverRole === 'local') {
-            // Vehicle detected ahead within 28 meters
-            if (distZ < 0 && distZ > -28 && distX < 1.85) {
-              // 1a. Decisive lane swerve: steer into the open lane
-              const targetEvasionX = t.group.position.x > 0 ? -1.45 : 1.45;
-              this.carSteerX += (targetEvasionX - this.carSteerX) * Math.min(1.0, 10 * dt);
-
-              // 1b. Active Braking & Speed Matching: Slow down proportional to distance!
-              if (distZ > -18) {
-                // Emergency brake down to match or fall behind traffic speed
-                const safeSpeed = Math.min(t.speed * 0.9, 0.35);
-                this.driveSpeed += (safeSpeed - this.driveSpeed) * Math.min(1.0, 12 * dt);
-                if (this.onSpeedChange) this.onSpeedChange(this.driveSpeed);
-              }
-
-              // 1c. HARD SAFETY BARRIER: Prevent car from ever penetrating/clipping through NPC!
-              if (distZ > -4.2 && distX < 1.5) {
-                // Clamp vehicle ahead of player car to never clip
-                t.z = 3.8 - 4.2;
-                t.group.position.z = t.z;
-                // Force match speed exactly so no overlap can ever occur
-                this.driveSpeed = Math.min(this.driveSpeed, t.speed);
-                if (this.onSpeedChange) this.onSpeedChange(this.driveSpeed);
-              }
-            }
+          // 1. AUTO-PILOT: belok ke jalur kosong. TIDAK ada pengereman —
+          // slider kecepatan tetap dipertahankan.
+          if (autoEvadeX !== null && distZ < 2 && distZ > -40 && distX < 2.1) {
+            this.carSteerX += (autoEvadeX - this.carSteerX) * Math.min(1.0, 10 * dt);
           }
 
           // 2. MANUAL RUSUH COLLISION: If manual drive hits traffic, cartoony bounce away (NO GORE!)
@@ -4213,6 +4235,16 @@ export class Engine3D {
             t.group.position.set(t.baseX, 0.4, t.z);
             t.group.rotation.set(0, 0, 0);
           }
+        }
+      }
+
+      // Auto-pilot selalu kembali ke batas gas yang diset pemain setelah
+      // menghindar. Rintangan tidak pernah menurunkan kecepatan di sini.
+      if (this.isAutoPilot && this.driverRole === 'local') {
+        const diff = this.speedLimit - this.driveSpeed;
+        if (Math.abs(diff) > 0.001) {
+          this.driveSpeed += Math.sign(diff) * Math.min(Math.abs(diff), 1.2 * dt);
+          if (this.onSpeedChange) this.onSpeedChange(this.driveSpeed);
         }
       }
 
