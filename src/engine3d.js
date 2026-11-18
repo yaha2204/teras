@@ -652,8 +652,8 @@ export class Engine3D {
     // Camera setup
     const aspect = window.innerWidth / window.innerHeight;
     this.baseFrustumSize = 42;
-    this.terraceSize = 36;        // Halaman depan yang lapang
-    this.terraceDoorZ = -10.0;    // Pintu mansion setelah rumah didorong ke belakang
+    this.terraceSize = 48;        // Taman luas dengan area tengah terbuka
+    this.terraceDoorZ = -13.5;    // Pintu mansion setelah rumah didorong ke belakang
     this.interiorScale = 1.9;     // Interior lapang (sebelumnya 1.55)
     this.currentZoom = 1.0;
 
@@ -1026,40 +1026,55 @@ export class Engine3D {
     lawn.receiveShadow = true;
     this.terraceGroup.add(lawn);
 
-    // Teras/veranda depan yang lebar, bukan sekadar lantai sempit.
+    // Veranda lebar di depan mansion.
     const deck = new THREE.Mesh(
-      new THREE.BoxGeometry(24, 0.22, 10),
+      new THREE.BoxGeometry(30, 0.22, 12),
       new THREE.MeshLambertMaterial({ color: '#b07d56' })
     );
-    deck.position.set(0, 0.16, -6.5);
+    deck.position.set(0, 0.16, -9);
     deck.receiveShadow = true;
     this.terraceGroup.add(deck);
 
     const deckTrim = new THREE.Mesh(
-      new THREE.BoxGeometry(24.6, 0.14, 0.35),
+      new THREE.BoxGeometry(30.6, 0.14, 0.35),
       new THREE.MeshLambertMaterial({ color: '#d9b382' })
     );
-    deckTrim.position.set(0, 0.24, -1.5);
+    deckTrim.position.set(0, 0.24, -3);
     this.terraceGroup.add(deckTrim);
 
     const stoneMat = new THREE.MeshLambertMaterial({ color: '#d9d0c1' });
-    for (let z = -2; z <= 14; z += 1.4) {
-      const stone = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.08, 1.1), stoneMat);
+    for (let z = -4; z <= 20; z += 1.4) {
+      const stone = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.08, 1.1), stoneMat);
       stone.position.set(0, 0.16, z);
       stone.receiveShadow = true;
       this.terraceGroup.add(stone);
     }
 
-    // Rumah didorong ke belakang, furnitur taman dijarangkan ke pinggir.
-    this.buildCottageBackdrop(0, 0, -12.5);
-    this.buildRoseArch(0, 0, 3.5);
-    this.buildPatioTable(8.5, 0, -6.0);
-    this.buildGardenBench(-9.5, 0, -5.5);
-    this.buildFountainPond(11, 0, 8);
-    this.buildStoneKoiPondBridge(11, 0, 8);
-    this.buildGardenGazebo(-12, 0, 9);
-    this.buildRomanticTreeSwing(-13, 0, -5);
-    this.buildGardenPicnicSpot(5, 0, 13);
+    // Rumah di belakang, furnitur di pinggir, tengah tetap lapang.
+    this.buildCottageBackdrop(0, 0, -16);
+    this.buildRoseArch(0, 0, 5);
+    this.buildPatioTable(11, 0, -8);
+    this.buildGardenBench(-12, 0, -7.5);
+    this.buildFountainPond(14, 0, 11);
+    this.buildStoneKoiPondBridge(14, 0, 11);
+    this.buildGardenGazebo(-15, 0, 12);
+    this.buildRomanticTreeSwing(-16, 0, -7);
+    this.buildGardenPicnicSpot(6, 0, 18);
+
+    // Elemen taman terstruktur.
+    this.buildCircularPath(0, 7, 9);
+    this.buildHedgeParterre(-8, 1, 6, 5);
+    this.buildHedgeParterre(8, 1, 6, 5);
+    this.buildHedgeParterre(-9, 11, 6, 5);
+    this.buildHedgeParterre(9, 11, 6, 5);
+    this.buildPergolaWalk(-4.5, 2, 9);
+    this.buildPergolaWalk(4.5, 2, 9);
+    [0, 4, 8, 12, 16].forEach((z) => {
+      this.buildGardenLantern(-2.8, z);
+      this.buildGardenLantern(2.8, z);
+    });
+    [[-12, -2], [12, -2], [-12, 17], [12, 17]].forEach(([x, z]) => this.buildTopiary(x, z));
+
     this.buildFairyGarlandLights();
     this.populateAbundantFlowers();
   }
@@ -1740,6 +1755,147 @@ export class Engine3D {
     this.terraceGroup.add(spot);
   }
 
+  /** Jalur batu melingkar mengelilingi rumput tengah. */
+  buildCircularPath(cx, cz, radius) {
+    const mat = new THREE.MeshLambertMaterial({ color: '#e2d7c3' });
+    const count = 28;
+    for (let i = 0; i < count; i++) {
+      if (i % 7 === 0) continue; // celah supaya terlihat alami
+      const a = (i / count) * Math.PI * 2;
+      const stone = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.07, 0.9), mat);
+      stone.position.set(cx + Math.cos(a) * radius, 0.15, cz + Math.sin(a) * radius);
+      stone.rotation.y = -a;
+      stone.receiveShadow = true;
+      this.terraceGroup.add(stone);
+    }
+  }
+
+  /** Kebat bunga berpagar rapi (parterre), bukan sekadar kumpulan bunga. */
+  buildHedgeParterre(x, z, w, d) {
+    const g = new THREE.Group();
+    g.position.set(x, 0, z);
+
+    const soil = new THREE.Mesh(
+      new THREE.BoxGeometry(w, 0.22, d),
+      new THREE.MeshLambertMaterial({ color: '#6b4f2a' })
+    );
+    soil.position.y = 0.16;
+    soil.receiveShadow = true;
+    g.add(soil);
+
+    const hedgeMat = new THREE.MeshLambertMaterial({ color: '#386641' });
+    const t = 0.55;
+    const parts = [
+      [w, 0.9, t, 0, 0.55, -d / 2],
+      [w, 0.9, t, 0, 0.55, d / 2],
+      [t, 0.9, d, -w / 2, 0.55, 0],
+      [t, 0.9, d, w / 2, 0.55, 0]
+    ];
+    for (const [pw, ph, pd, px, py, pz] of parts) {
+      const hedge = new THREE.Mesh(new THREE.BoxGeometry(pw, ph, pd), hedgeMat);
+      hedge.position.set(px, py, pz);
+      hedge.castShadow = true;
+      g.add(hedge);
+    }
+
+    const colors = ['#ffb703', '#f72585', '#ff758f', '#ffd166', '#e63946', '#9d4edd'];
+    for (let i = 0; i < 4; i++) {
+      for (let j = 0; j < 3; j++) {
+        const fx = -w / 2 + 0.9 + i * ((w - 1.8) / 3);
+        const fz = -d / 2 + 0.9 + j * ((d - 1.8) / 2);
+        const stem = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.04, 0.04, 0.5, 5),
+          new THREE.MeshLambertMaterial({ color: '#2d6a4f' })
+        );
+        stem.position.set(fx, 0.55, fz);
+        g.add(stem);
+        const bloom = new THREE.Mesh(
+          new THREE.SphereGeometry(0.3, 7, 5),
+          new THREE.MeshLambertMaterial({
+            color: colors[Math.abs(i + j + Math.floor(x)) % colors.length]
+          })
+        );
+        bloom.position.set(fx, 0.9, fz);
+        bloom.scale.y = 0.8;
+        g.add(bloom);
+      }
+    }
+    this.terraceGroup.add(g);
+  }
+
+  /** Pergola berlapis mawar di dua sisi jalan utama. */
+  buildPergolaWalk(x, z, length) {
+    const g = new THREE.Group();
+    g.position.set(x, 0, z);
+    const wood = new THREE.MeshLambertMaterial({ color: '#7f5539' });
+    const rose = new THREE.MeshLambertMaterial({ color: '#ff8fab' });
+    const pairs = 4;
+    for (let i = 0; i <= pairs; i++) {
+      const pz = (i / pairs) * length;
+      [-1.6, 1.6].forEach((px) => {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.22, 3.4, 0.22), wood);
+        post.position.set(px, 1.7, pz);
+        post.castShadow = true;
+        g.add(post);
+      });
+      const beam = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.18, 0.25), wood);
+      beam.position.set(0, 3.4, pz);
+      g.add(beam);
+      for (let k = 0; k < 5; k++) {
+        const flower = new THREE.Mesh(new THREE.SphereGeometry(0.22, 6, 5), rose);
+        flower.position.set(-1.4 + k * 0.7, 3.35 - Math.random() * 0.25, pz);
+        g.add(flower);
+      }
+    }
+    this.terraceGroup.add(g);
+  }
+
+  buildGardenLantern(x, z) {
+    const g = new THREE.Group();
+    g.position.set(x, 0, z);
+    const metal = new THREE.MeshLambertMaterial({ color: '#4a4e69' });
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 2.4, 8), metal);
+    post.position.y = 1.2;
+    g.add(post);
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.12, 0.55), metal);
+    cap.position.y = 2.5;
+    g.add(cap);
+    const glow = new THREE.Mesh(
+      new THREE.SphereGeometry(0.22, 10, 8),
+      new THREE.MeshStandardMaterial({
+        color: 0xfff3b0, emissive: 0xffd166, emissiveIntensity: 1.1
+      })
+    );
+    glow.position.y = 2.25;
+    g.add(glow);
+    this.terraceGroup.add(g);
+  }
+
+  buildTopiary(x, z) {
+    const g = new THREE.Group();
+    g.position.set(x, 0, z);
+    const pot = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.55, 0.4, 0.75, 10),
+      new THREE.MeshLambertMaterial({ color: '#b85d38' })
+    );
+    pot.position.y = 0.38;
+    g.add(pot);
+    const trunk = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.12, 0.16, 1.1, 8),
+      new THREE.MeshLambertMaterial({ color: '#6b4f2a' })
+    );
+    trunk.position.y = 1.2;
+    g.add(trunk);
+    const leafMat = new THREE.MeshLambertMaterial({ color: '#2d6a4f' });
+    [[0, 2.1, 0, 0.85], [0.35, 2.75, 0.1, 0.55], [-0.35, 2.65, -0.1, 0.5]].forEach(([lx, ly, lz, r]) => {
+      const leaf = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), leafMat);
+      leaf.position.set(lx, ly, lz);
+      leaf.scale.y = 1.15;
+      g.add(leaf);
+    });
+    this.terraceGroup.add(g);
+  }
+
   buildFairyGarlandLights() {
     const garland = new THREE.Group();
     const bulbMat = new THREE.MeshStandardMaterial({
@@ -1750,9 +1906,9 @@ export class Engine3D {
 
     // Hanging string lights curve across the terrace
     const lightCoords = [
-      [-4.0, 4.2, -4.5], [-2.5, 3.6, -2.5], [-1.0, 3.2, 0.0],
-      [0.0, 3.3, 1.5], [1.0, 3.2, 0.0], [2.5, 3.6, -2.5], [4.0, 4.2, -4.5],
-      [-5.5, 3.2, 3.5], [-6.2, 2.8, 4.5]
+      [-6.0, 4.2, -10], [-4.0, 3.6, -7], [-2.0, 3.2, -3],
+      [0.0, 3.3, 2], [2.0, 3.2, -3], [4.0, 3.6, -7], [6.0, 4.2, -10],
+      [-7.0, 3.2, 6], [7.0, 3.2, 6]
     ];
 
     for (const [lx, ly, lz] of lightCoords) {
@@ -1774,10 +1930,10 @@ export class Engine3D {
 
     // 1. Sunflowers in terracotta pots
     const sunflowerPots = [
-      { x: -9, z: -8 },
-      { x: -9, z: 5 },
-      { x: 9, z: -8 },
-      { x: 9.5, z: 5 }
+      { x: -12, z: -11 },
+      { x: -12, z: 7 },
+      { x: 12, z: -11 },
+      { x: 12, z: 7 }
     ];
     for (const sp of sunflowerPots) {
       const g = new THREE.Group();
@@ -1804,25 +1960,27 @@ export class Engine3D {
     }
 
     // 2. Lavender Fields (Instanced / Compact flower patches)
-    for (let z = -4; z <= 10; z += 1.8) {
+    for (let z = -6; z <= 16; z += 1.8) {
       const lav1 = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.8, 0.8), lavMat);
-      lav1.position.set(-10, 0.4, z);
+      lav1.position.set(-14, 0.4, z);
       this.terraceGroup.add(lav1);
 
       const lav2 = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.8, 0.8), lavMat);
-      lav2.position.set(10, 0.4, z);
+      lav2.position.set(14, 0.4, z);
       this.terraceGroup.add(lav2);
     }
 
     // 3. Tulip Flowerbeds
     const tulipColors = ['#f72585', '#ffb703', '#e63946', '#ff758f', '#ffcad4', '#ffd166'];
     const tulipCoords = [
-      { x: -6, z: 8 },
-      { x: -3.5, z: 10 },
-      { x: 3.5, z: 10 },
-      { x: 6, z: 8 },
-      { x: -5, z: 3 },
-      { x: 5, z: 3 }
+      { x: -7, z: 6 },
+      { x: -4, z: 8 },
+      { x: 4, z: 8 },
+      { x: 7, z: 6 },
+      { x: -3, z: 2 },
+      { x: 3, z: 2 },
+      { x: -5, z: 18 },
+      { x: 5, z: 18 }
     ];
     for (let i = 0; i < tulipCoords.length; i++) {
       const c = tulipCoords[i];
@@ -1834,8 +1992,8 @@ export class Engine3D {
     }
 
     // 4. Cherry Blossom Trees
-    this.buildBlossomTree(-10, 0, -4.5, '#ffcad4');
-    this.buildBlossomTree(10, 0, -4.5, '#f4a6b0');
+    this.buildBlossomTree(-13, 0, -6, '#ffcad4');
+    this.buildBlossomTree(13, 0, -6, '#f4a6b0');
   }
 
   buildSunflowerPot(x, y, z) {
@@ -3868,7 +4026,7 @@ export class Engine3D {
       }
 
       if (dx !== 0 || dz !== 0) {
-        let minX = -16, maxX = 16, minZ = -11, maxZ = 16;
+        let minX = -22, maxX = 22, minZ = -15, maxZ = 22;
         if (this.currentSceneName === 'interior') {
           minX = -7.5 * this.interiorScale; maxX = 7.5 * this.interiorScale;
           minZ = -5.5 * this.interiorScale; maxZ = 5.5 * this.interiorScale;
@@ -3953,7 +4111,7 @@ export class Engine3D {
         }
 
         const pt = hit.point;
-        let minX = -16, maxX = 16, minZ = -11, maxZ = 16;
+        let minX = -22, maxX = 22, minZ = -15, maxZ = 22;
         if (this.currentSceneName === 'interior') {
           minX = -7.5 * this.interiorScale; maxX = 7.5 * this.interiorScale;
           minZ = -5.5 * this.interiorScale; maxZ = 5.5 * this.interiorScale;
