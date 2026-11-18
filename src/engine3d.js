@@ -709,6 +709,8 @@ export class Engine3D {
     this.carSteerX = 0; // road lane steering (-2.0 to 2.0)
     this.carVelocityX = 0; // Smooth physical lateral momentum (no lag, no jerk!)
     this.carBumpOffset = 0; // Sedikit jolt saat kena tabrakan ringan
+    this.autoLaneX = null; // Jalur evasi auto-pilot (di-hold supaya tidak goyah)
+    this.autoLaneHold = 0;
     this.roadScrollZ = 0;
     this.driverRole = 'local'; // 'local' (left seat drives) or 'remote' (right seat drives)
     this.carLookAngle = 0; // -0.45 (look left), 0 (center), 0.45 (look right)
@@ -4106,12 +4108,14 @@ export class Engine3D {
 
         // Gentle chassis tilt into turns
         const steerDiff = this.carSteerX - this.driveCar.position.x;
-        this.driveCar.rotation.y = -steerDiff * 0.18;
+        this.driveCar.rotation.y = Math.max(-0.22, Math.min(0.22, -steerDiff * 0.18));
 
         // Steering wheel turns gracefully in direct sync
         if (this.steeringWheelGroup) {
-          const targetSteerAngle = -steerDiff * 2.8;
-          this.steeringWheelGroup.rotation.z += (targetSteerAngle - this.steeringWheelGroup.rotation.z) * (18 * dt);
+          // Setir realistis: maksimal ~45°, tidak ikut loncatan jalur auto-pilot.
+          const targetSteerAngle = Math.max(-0.8, Math.min(0.8, -steerDiff * 0.32));
+          this.steeringWheelGroup.rotation.z +=
+            (targetSteerAngle - this.steeringWheelGroup.rotation.z) * Math.min(1, 6 * dt);
         }
 
         // Flashing Emergency Strobe Siren Beacon (Red & Blue rapid alternating strobe)
@@ -4156,6 +4160,7 @@ export class Engine3D {
         );
 
         if (threats.length) {
+          this.autoLaneHold = 0;
           const obstacleX = threats.sort((a, b) => b.z - a.z)[0].group.position.x;
           const candidates = lanes.filter((x) => Math.abs(x - carActualX) > 0.85);
           const clear = candidates.filter((x) => !laneIsBlocked(x));
@@ -4164,8 +4169,21 @@ export class Engine3D {
             + (clear.includes(x) ? 0 : 4)
             + (Math.sign(x - carActualX) === Math.sign(obstacleX - carActualX) ? 3 : 0);
           pool.sort((a, b) => score(a) - score(b));
-          autoEvadeX = pool[0] ?? null;
+
+          // Hysteresis: jalur yang sudah dipilih dipertahankan sampai benar-benar
+          // tidak aman. Ini mencegah setir bolak-balik tiap frame (efek gempa).
+          const keepCurrent = this.autoLaneX !== null
+            && candidates.includes(this.autoLaneX)
+            && !laneIsBlocked(this.autoLaneX);
+          if (!keepCurrent) this.autoLaneX = pool[0] ?? null;
+        } else {
+          this.autoLaneHold = (this.autoLaneHold || 0) + dt;
+          if (this.autoLaneHold > 0.8) {
+            this.autoLaneX = null;
+            this.autoLaneHold = 0;
+          }
         }
+        autoEvadeX = this.autoLaneX;
       }
 
       for (const t of this.trafficList) {
@@ -4199,12 +4217,6 @@ export class Engine3D {
           // Proximity detection to player car (Cockpit front is around Z = 2.0 to 4.0)
           const distZ = t.z - 3.8; // negative means vehicle is ahead of player
           const distX = Math.abs(t.group.position.x - carActualX);
-
-          // 1. AUTO-PILOT: belok ke jalur kosong. TIDAK ada pengereman —
-          // slider kecepatan tetap dipertahankan.
-          if (autoEvadeX !== null && distZ < 2 && distZ > -40 && distX < 2.1) {
-            this.carSteerX += (autoEvadeX - this.carSteerX) * Math.min(1.0, 10 * dt);
-          }
 
           // 2. TABRAKAN RINGAN: kena dikit dibolehkan. Kendaraan yang kena
           // terpental lucu, kecepatan mobil kita TIDAK dikurangi.
@@ -4244,6 +4256,12 @@ export class Engine3D {
             t.group.rotation.set(0, 0, 0);
           }
         }
+      }
+
+      // Belok ke jalur evasion sekali per frame dengan kecepatan halus,
+      // bukan berulang kali tiap kendaraan (itu yang bikin setir goyah).
+      if (autoEvadeX !== null) {
+        this.carSteerX += (autoEvadeX - this.carSteerX) * Math.min(1, 4 * dt);
       }
 
       // Auto-pilot selalu kembali ke batas gas yang diset pemain setelah
@@ -4304,9 +4322,8 @@ export class Engine3D {
 
     // Jolt halus saat kena dikit — biar kerasa tanpa mengubah kecepatan.
     if (this.carBumpOffset > 0.001) {
-      this.perspectiveCamera.position.y += Math.sin(timestamp * 0.06) * this.carBumpOffset;
-      this.perspectiveCamera.rotation.z += Math.sin(timestamp * 0.04) * this.carBumpOffset * 0.05;
-      this.carBumpOffset *= 0.9;
+      this.perspectiveCamera.position.y += Math.sin(timestamp * 0.02) * this.carBumpOffset;
+      this.carBumpOffset *= 0.82;
     } else {
       this.carBumpOffset = 0;
     }
