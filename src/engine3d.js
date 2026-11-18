@@ -648,7 +648,8 @@ export class Engine3D {
 
     // Camera setup
     const aspect = window.innerWidth / window.innerHeight;
-    this.baseFrustumSize = 36;
+    this.baseFrustumSize = 42;
+    this.interiorScale = 1.55; // Rumah lebih luas dari versi sebelumnya (1.35)
     this.currentZoom = 1.0;
 
     this.camera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 1500);
@@ -711,6 +712,7 @@ export class Engine3D {
     this.carBumpOffset = 0; // Sedikit jolt saat kena tabrakan ringan
     this.autoLaneX = null; // Jalur evasi auto-pilot (di-hold supaya tidak goyah)
     this.autoLaneHold = 0;
+    this.autoLaneCooldown = 0;
     this.roadScrollZ = 0;
     this.driverRole = 'local'; // 'local' (left seat drives) or 'remote' (right seat drives)
     this.carLookAngle = 0; // -0.45 (look left), 0 (center), 0.45 (look right)
@@ -976,9 +978,9 @@ export class Engine3D {
 
     let effectiveFrustum = this.baseFrustumSize / this.currentZoom;
     if (aspect < 1.0) {
-      let portraitBase = 29.0;
-      if (this.currentSceneName === 'interior') portraitBase = 34.0;
-      if (this.currentSceneName === 'drive') portraitBase = 28.0;
+      let portraitBase = 34.0;
+      if (this.currentSceneName === 'interior') portraitBase = 42.0;
+      if (this.currentSceneName === 'drive') portraitBase = 32.0;
       effectiveFrustum = portraitBase / (aspect * this.currentZoom);
     }
 
@@ -1936,7 +1938,7 @@ export class Engine3D {
 
   getInteriorFloorHeight(x, z) {
     if (this.currentSceneName !== 'interior') return 0;
-    const S = 1.35; // Scaling factor for luxury mansion interior
+    const S = this.interiorScale; // Scaling factor for luxury mansion interior
 
     // 1. Check if avatar is on the 2nd Floor Mezzanine Deck
     // Scaled bounds: X from -8.2 * S (-11.07) to 3.2 * S (4.32), Z from -6.1 * S (-8.23) to -2.4 * S (-3.24)
@@ -1956,7 +1958,7 @@ export class Engine3D {
 
   isInteriorSolidObstacle(x, z) {
     if (this.currentSceneName !== 'interior') return false;
-    const S = 1.35;
+    const S = this.interiorScale;
     const y = this.getInteriorFloorHeight(x, z);
 
     // If on stairs or heading onto stairs, NEVER block!
@@ -2429,8 +2431,8 @@ export class Engine3D {
     // 14. Pintu Keluar Utama ke Teras (Exit Door)
     this.buildSpaciousExitDoor(0, 0, 5.8);
 
-    // Apply clean 1.35x scale to expand interior space without touching original Three.js geometry or detail!
-    this.interiorGroup.scale.set(1.35, 1.35, 1.35);
+    // Perbesar interior rumah tanpa mengubah detail geometry aslinya.
+    this.interiorGroup.scale.setScalar(this.interiorScale);
   }
 
   buildHangingPlant(x, y, z) {
@@ -3739,7 +3741,7 @@ export class Engine3D {
       }
 
       this.activeCamera = this.camera; // Isometric Orthographic
-      this.baseFrustumSize = 36; // Expansive majestic view capturing the entire neoclassical mansion
+      this.baseFrustumSize = 42; // Tampilan lebih luas, mansion terlihat utuh
       this.scene.background.set('#e8f0ec'); // Fresh morning garden sky
       this.ambientLight.intensity = 0.88;
       this.dirLight.intensity = 0.85;
@@ -3757,7 +3759,7 @@ export class Engine3D {
       }
 
       this.activeCamera = this.camera; // Isometric Orthographic
-      this.baseFrustumSize = 27; // Broad expansive view
+      this.baseFrustumSize = 34; // Interior rumah yang lebih luas terlihat semua
       this.scene.background.set('#231c18'); // Warm cozy interior twilight
       this.ambientLight.intensity = 0.72;
       this.dirLight.intensity = 0.65;
@@ -3914,22 +3916,22 @@ export class Engine3D {
 
         // Click staircase steps to smoothly walk up to 2nd floor loft!
         if (hit.object.name === 'staircase_step') {
-          this.setLocalPlayerTarget(3.9 * 1.35, -3.2 * 1.35);
+          this.setLocalPlayerTarget(3.9 * this.interiorScale, -3.2 * this.interiorScale);
           return;
         }
 
         // Click 2nd floor mezzanine deck to walk upstairs!
         if (hit.object.name === 'mezzanine_deck') {
-          this.setLocalPlayerTarget(-2.5 * 1.35, -4.25 * 1.35);
+          this.setLocalPlayerTarget(-2.5 * this.interiorScale, -4.25 * this.interiorScale);
           return;
         }
 
         // Click bed to lay down and sleep!
         if (hit.object.name && hit.object.name.startsWith('click_bed_')) {
           if (hit.object.name.includes('atas')) {
-            this.toggleLayOnBed(-4.0 * 1.35, -4.5 * 1.35, 'Lantai Atas', (3.22 + 0.95) * 1.35);
+            this.toggleLayOnBed(-4.0 * this.interiorScale, -4.5 * this.interiorScale, 'Lantai Atas', (3.22 + 0.95) * this.interiorScale);
           } else {
-            this.toggleLayOnBed(5.8 * 1.35, 3.6 * 1.35, 'Kanan', 1.05 * 1.35);
+            this.toggleLayOnBed(5.8 * this.interiorScale, 3.6 * this.interiorScale, 'Kanan', 1.05 * this.interiorScale);
           }
           return;
         }
@@ -3937,7 +3939,8 @@ export class Engine3D {
         const pt = hit.point;
         let minX = -6.5, maxX = 6.5, minZ = -5.0, maxZ = 6.5;
         if (this.currentSceneName === 'interior') {
-          minX = -7.5 * 1.35; maxX = 7.5 * 1.35; minZ = -5.5 * 1.35; maxZ = 5.5 * 1.35;
+          minX = -7.5 * this.interiorScale; maxX = 7.5 * this.interiorScale;
+          minZ = -5.5 * this.interiorScale; maxZ = 5.5 * this.interiorScale;
         }
 
         const clampedX = Math.max(minX, Math.min(maxX, pt.x));
@@ -4000,7 +4003,7 @@ export class Engine3D {
         return;
       }
     } else if (this.currentSceneName === 'interior') {
-      if (Math.hypot(x - 0, z - (5.8 * 1.35)) < 1.6) {
+      if (Math.hypot(x - 0, z - (5.8 * this.interiorScale)) < 1.6) {
         this.switchScene('terrace', 0, -2.5);
         return;
       }
@@ -4027,6 +4030,10 @@ export class Engine3D {
         scene: data.scene || 'terrace',
         shirtColor: data.shirtColor || '#52796f',
         hairColor: data.hairColor || '#222222',
+        gender: data.gender || 'boy',
+        isSleeping: !!data.isSleeping,
+        bedLabel: data.bedLabel || null,
+        sleepHeight: data.sleepHeight || null,
         mesh: null
       };
       this.createChibiAvatar(remote);
@@ -4046,6 +4053,15 @@ export class Engine3D {
       if (data.hairColor) {
         p.hairColor = data.hairColor;
         this.updateAvatarAppearance(p);
+      }
+      if (data.gender) {
+        p.gender = data.gender;
+        this.updateAvatarAppearance(p);
+      }
+      if (data.isSleeping !== undefined) {
+        p.isSleeping = !!data.isSleeping;
+        p.bedLabel = data.bedLabel || null;
+        p.sleepHeight = data.sleepHeight || null;
       }
     }
   }
@@ -4108,14 +4124,14 @@ export class Engine3D {
 
         // Gentle chassis tilt into turns
         const steerDiff = this.carSteerX - this.driveCar.position.x;
-        this.driveCar.rotation.y = Math.max(-0.22, Math.min(0.22, -steerDiff * 0.18));
+        this.driveCar.rotation.y = Math.max(-0.12, Math.min(0.12, -steerDiff * 0.1));
 
         // Steering wheel turns gracefully in direct sync
         if (this.steeringWheelGroup) {
-          // Setir realistis: maksimal ~45°, tidak ikut loncatan jalur auto-pilot.
-          const targetSteerAngle = Math.max(-0.8, Math.min(0.8, -steerDiff * 0.32));
+          // Setir santai: putarannya kecil & lambat, tidak ikut loncatan jalur.
+          const targetSteerAngle = Math.max(-0.45, Math.min(0.45, -steerDiff * 0.15));
           this.steeringWheelGroup.rotation.z +=
-            (targetSteerAngle - this.steeringWheelGroup.rotation.z) * Math.min(1, 6 * dt);
+            (targetSteerAngle - this.steeringWheelGroup.rotation.z) * Math.min(1, 3 * dt);
         }
 
         // Flashing Emergency Strobe Siren Beacon (Red & Blue rapid alternating strobe)
@@ -4148,21 +4164,24 @@ export class Engine3D {
       let autoEvadeX = null;
       if (this.isAutoPilot && this.driverRole === 'local') {
         const lanes = [-4.2, -2.1, 0, 2.1, 4.2];
+        // Hanya reaksi kalau kendaraan benar-benar dekat & searah. Kena dikit
+        // sudah dibuat terpental, jadi tidak perlu mencari jalur dari jauh.
         const aheadOfUs = (o) => {
           const dz = o.z - 3.8;
-          return dz < 2 && dz > -40;
+          return dz < 1 && dz > -18;
         };
         const laneIsBlocked = (x) => this.trafficList.some((o) =>
-          aheadOfUs(o) && Math.abs(o.group.position.x - x) < 1.75
+          aheadOfUs(o) && Math.abs(o.group.position.x - x) < 1.6
         );
         const threats = this.trafficList.filter((o) =>
-          aheadOfUs(o) && Math.abs(o.group.position.x - carActualX) < 2.1
+          aheadOfUs(o) && Math.abs(o.group.position.x - carActualX) < 1.6
         );
 
+        this.autoLaneCooldown = Math.max(0, this.autoLaneCooldown - dt);
         if (threats.length) {
           this.autoLaneHold = 0;
           const obstacleX = threats.sort((a, b) => b.z - a.z)[0].group.position.x;
-          const candidates = lanes.filter((x) => Math.abs(x - carActualX) > 0.85);
+          const candidates = lanes.filter((x) => Math.abs(x - carActualX) > 0.7);
           const clear = candidates.filter((x) => !laneIsBlocked(x));
           const pool = clear.length ? clear : candidates;
           const score = (x) => Math.abs(x - carActualX)
@@ -4170,15 +4189,18 @@ export class Engine3D {
             + (Math.sign(x - carActualX) === Math.sign(obstacleX - carActualX) ? 3 : 0);
           pool.sort((a, b) => score(a) - score(b));
 
-          // Hysteresis: jalur yang sudah dipilih dipertahankan sampai benar-benar
-          // tidak aman. Ini mencegah setir bolak-balik tiap frame (efek gempa).
+          // Jalur yang sudah dipilih dipertahankan sampai benar-benar tertutup.
+          // Cooldown mencegah ganti jalur lagi tiap kali ada mobil lewat.
           const keepCurrent = this.autoLaneX !== null
-            && candidates.includes(this.autoLaneX)
-            && !laneIsBlocked(this.autoLaneX);
-          if (!keepCurrent) this.autoLaneX = pool[0] ?? null;
+            && !laneIsBlocked(this.autoLaneX)
+            && Math.abs(this.autoLaneX - carActualX) < 3.5;
+          if (!keepCurrent && this.autoLaneCooldown <= 0) {
+            this.autoLaneX = pool[0] ?? null;
+            this.autoLaneCooldown = 3.0;
+          }
         } else {
           this.autoLaneHold = (this.autoLaneHold || 0) + dt;
-          if (this.autoLaneHold > 0.8) {
+          if (this.autoLaneHold > 2.0) {
             this.autoLaneX = null;
             this.autoLaneHold = 0;
           }
@@ -4229,10 +4251,12 @@ export class Engine3D {
               soft ? 6 + Math.random() * 4 : 12 + Math.random() * 6,
               soft ? -6 : -10
             );
+            // Tilt kecil saja — jangan sampai kendaraan terbalik.
+            const spin = (s) => (Math.random() - 0.5) * 2 * s;
             t.bounceRotation.set(
-              Math.random() * (soft ? 6 : 10),
-              Math.random() * (soft ? 8 : 15),
-              Math.random() * (soft ? 6 : 12)
+              spin(soft ? 1.2 : 2.4),
+              spin(soft ? 0.8 : 1.6),
+              spin(soft ? 1.2 : 2.4)
             );
             this.carBumpOffset = soft ? 0.09 : 0.16;
             if (this.onCrashBounce) this.onCrashBounce();
@@ -4244,16 +4268,22 @@ export class Engine3D {
           t.group.position.z += t.bounceVelocity.z * dt;
           t.bounceVelocity.y -= 28 * dt; // Gravity
 
-          t.group.rotation.x += t.bounceRotation.x * dt;
-          t.group.rotation.y += t.bounceRotation.y * dt;
-          t.group.rotation.z += t.bounceRotation.z * dt;
+          t.group.rotation.x = Math.max(-0.4, Math.min(0.4,
+            t.group.rotation.x + t.bounceRotation.x * dt));
+          t.group.rotation.z = Math.max(-0.4, Math.min(0.4,
+            t.group.rotation.z + t.bounceRotation.z * dt));
+          // Yaw dibatasi di sekitar arah jalan (-Z), tidak boleh berputar balik.
+          t.bounceYaw = Math.max(-0.35, Math.min(0.35,
+            (t.bounceYaw || 0) + t.bounceRotation.y * dt));
+          t.group.rotation.y = Math.PI + t.bounceYaw;
 
           // Reset when fallen below ground
           if (t.group.position.y < -5) {
             t.isBounced = false;
+            t.bounceYaw = 0;
             t.z = -100 - Math.random() * 30;
             t.group.position.set(t.baseX, 0.4, t.z);
-            t.group.rotation.set(0, 0, 0);
+            t.group.rotation.set(0, Math.PI, 0);
           }
         }
       }
@@ -4261,7 +4291,7 @@ export class Engine3D {
       // Belok ke jalur evasion sekali per frame dengan kecepatan halus,
       // bukan berulang kali tiap kendaraan (itu yang bikin setir goyah).
       if (autoEvadeX !== null) {
-        this.carSteerX += (autoEvadeX - this.carSteerX) * Math.min(1, 4 * dt);
+        this.carSteerX += (autoEvadeX - this.carSteerX) * Math.min(1, 1.6 * dt);
       }
 
       // Auto-pilot selalu kembali ke batas gas yang diset pemain setelah

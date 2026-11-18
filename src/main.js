@@ -94,6 +94,97 @@ window.addEventListener('DOMContentLoaded', () => {
   });
   window.terasApi = apiClient;
 
+  // --- Kehadiran persisten: teman tetap menetap di room walau logout / offline ---
+  // Profil penghuni disimpan di server. Saat tidak terhubung P2P, avatarnya
+  // ditampilkan tidur di kasur, bukan dihapus.
+  const persistentOccupants = new Map();
+  const peerAccountIds = new Map();
+  let networkRef = null;
+
+  function presenceAvatar() {
+    return {
+      gender: engine.localPlayer.gender || profile.gender || 'boy',
+      hairColor: engine.localPlayer.hairColor || profile.hairColor || '#4a3b32',
+      shirtColor: engine.localPlayer.shirtColor || profile.shirtColor || '#f28482'
+    };
+  }
+
+  function sendPresence(state, options = {}) {
+    if (!apiClient.token || !apiClient.currentUser) return;
+    Promise.resolve(apiClient.updatePresence(roomId, {
+      displayName: engine.localPlayer.name || profile.name,
+      avatarData: presenceAvatar(),
+      state,
+      scene: engine.currentSceneName || 'terrace'
+    }, options)).catch(() => {});
+  }
+
+  function sleepSpot(index) {
+    const S = 1.55; // disamakan dengan engine.interiorScale
+    const jitter = ((Math.floor(index / 2) % 3) - 1) * 0.5;
+    if (index % 2 === 0) {
+      return { x: 5.8 * S + jitter, z: 3.6 * S, heightY: 1.05 * S, bedLabel: 'Kanan' };
+    }
+    return {
+      x: -4.0 * S + jitter,
+      z: -4.5 * S,
+      heightY: (3.22 + 0.95) * S,
+      bedLabel: 'Lantai Atas'
+    };
+  }
+
+  function renderSleepingOccupants() {
+    if (!engine) return;
+    const myId = Number(apiClient.currentUser && apiClient.currentUser.id);
+    const onlineAccounts = new Set(peerAccountIds.values());
+    const keep = new Set();
+    let slot = 0;
+
+    for (const occ of persistentOccupants.values()) {
+      const accountId = Number(occ.accountId);
+      if (!accountId || accountId === myId) continue;
+      const ghostId = `sleep-${accountId}`;
+      if (onlineAccounts.has(accountId)) {
+        engine.removeRemotePlayer(ghostId);
+        continue;
+      }
+      keep.add(ghostId);
+      const spot = sleepSpot(slot++);
+      engine.updatePlayerState(ghostId, {
+        name: `${occ.name || 'Teman'} 💤`,
+        gender: occ.gender,
+        hairColor: occ.hairColor,
+        shirtColor: occ.shirtColor,
+        scene: 'interior',
+        x: spot.x,
+        z: spot.z,
+        isSleeping: true,
+        bedLabel: spot.bedLabel,
+        sleepHeight: spot.heightY
+      });
+    }
+
+    for (const pid of Array.from(engine.remotePlayers.keys())) {
+      if (pid.startsWith('sleep-') && !keep.has(pid)) engine.removeRemotePlayer(pid);
+    }
+  }
+
+  function loadOccupants() {
+    if (!apiClient.token) return;
+    Promise.resolve(apiClient.getOccupants(roomId)).then((res) => {
+      if (!res || !res.success || !Array.isArray(res.occupants)) return;
+      persistentOccupants.clear();
+      for (const occ of res.occupants) persistentOccupants.set(String(occ.accountId), occ);
+      renderSleepingOccupants();
+    }).catch(() => {});
+  }
+
+  window.addEventListener('pagehide', () => sendPresence('sleeping', { keepalive: true }));
+  window.addEventListener('beforeunload', () => sendPresence('sleeping', { keepalive: true }));
+  setInterval(() => {
+    if (apiClient.token && !document.hidden) sendPresence('awake');
+  }, 10000);
+
   // Update Room Header
   const roomTitleEl = document.getElementById('roomTitle');
   if (roomTitleEl) roomTitleEl.textContent = '#' + roomId;
@@ -106,7 +197,8 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // Initialize Canvas 3D Isometric Engine
   const canvas = document.getElementById('gameCanvas');
-  const engine = new Engine3D(canvas);
+  let engine = null;
+  engine = new Engine3D(canvas);
 
   // Apply Initial Profile to Local Player
   engine.localPlayer.name = profile.name;
@@ -120,6 +212,7 @@ window.addEventListener('DOMContentLoaded', () => {
     if (!user) return;
     const displayName = user.displayName || user.username;
     profile.name = displayName;
+    profile.accountId = user.id;
     if (user.avatarData && user.avatarData.gender) profile.gender = user.avatarData.gender;
 
     engine.localPlayer.name = displayName;
@@ -140,6 +233,19 @@ window.addEventListener('DOMContentLoaded', () => {
       window.location.reload();
       return;
     }
+
+    // Beri tahu teman bahwa akun ini sedang online di room ini.
+    if (networkRef) {
+      networkRef.localProfile = profile;
+      networkRef.broadcast({
+        type: 'PROFILE',
+        clientId: networkRef.myClientId,
+        ...profile
+      });
+    }
+    sendPresence('awake');
+    loadOccupants();
+
     Promise.resolve(apiClient.ensureRoom({
       accountId: user.id,
       displayName
@@ -218,6 +324,9 @@ window.addEventListener('DOMContentLoaded', () => {
       engine.removeRemotePlayer(peerId);
       const leftClientId = peerClientIds.get(peerId);
       peerClientIds.delete(peerId);
+      peerAccountIds.delete(peerId);
+      // Teman yang keluar tetap tinggal di room sebagai avatar tidur.
+      renderSleepingOccupants();
       if (leftClientId && leftClientId === driverClientId) {
         driverClientId = network.myClientId;
         applyDriverAuthority();
@@ -255,6 +364,9 @@ window.addEventListener('DOMContentLoaded', () => {
         engine.carPeerProfile = peerProfile;
         engine.syncCarCompanion(peerProfile);
         if (data.clientId) peerClientIds.set(peerId, data.clientId);
+        if (data.accountId) peerAccountIds.set(peerId, Number(data.accountId));
+        // Teman yang sedang online tidak perlu ditampilkan sebagai tidur.
+        renderSleepingOccupants();
       } else if (data.type === 'CHAT') {
         appendChatMessage(data.name || 'Teman', data.text, false);
         showToast(`${data.name || 'Teman'}: ${data.text}`);
@@ -336,6 +448,7 @@ window.addEventListener('DOMContentLoaded', () => {
       showToast('Voice call terhubung langsung! 💖');
     }
   });
+  networkRef = network;
 
   // Awalnya pemain lokal yang pegang setir.
   driverClientId = network.myClientId;

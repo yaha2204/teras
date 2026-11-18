@@ -239,4 +239,40 @@ export class ThaloriaApiClient {
       return { success: false, error: 'Gagal menyiapkan room permanen' };
     }
   }
+
+  /** Tulis kehadiran akun. Dipakai juga dengan keepalive saat tab ditutup. */
+  updatePresence(roomCode, payload = {}, options = {}) {
+    if (!this.token) return Promise.resolve({ success: false, error: 'Belum login' });
+    const body = JSON.stringify({ roomCode, ...payload });
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${this.token}`
+    };
+    if (options.keepalive && typeof fetch === 'function') {
+      try {
+        // fetch keepalive bisa membawa header Authorization (sendBeacon tidak bisa).
+        return fetch(`${this.authUrl}/api/room/presence`, {
+          method: 'POST', headers, body, keepalive: true
+        }).then((r) => r.json()).catch(() => ({ success: false }));
+      } catch {
+        return Promise.resolve({ success: false });
+      }
+    }
+    return fetch(`${this.authUrl}/api/room/presence`, {
+      method: 'POST', headers, body
+    }).then((r) => r.json()).catch(() => ({ success: false, error: 'Gagal menyimpan kehadiran' }));
+  }
+
+  async getOccupants(roomCode) {
+    if (!this.token) return { success: false, error: 'Belum login', occupants: [] };
+    try {
+      const res = await fetch(
+        `${this.authUrl}/api/room/occupants?roomCode=${encodeURIComponent(roomCode)}`,
+        { headers: { Authorization: `Bearer ${this.token}` } }
+      );
+      return await res.json();
+    } catch {
+      return { success: false, error: 'Gagal membaca penghuni', occupants: [] };
+    }
+  }
 }
