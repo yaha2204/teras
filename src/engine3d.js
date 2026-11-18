@@ -708,6 +708,7 @@ export class Engine3D {
     this.isDriving = false;
     this.carSteerX = 0; // road lane steering (-2.0 to 2.0)
     this.carVelocityX = 0; // Smooth physical lateral momentum (no lag, no jerk!)
+    this.carBumpOffset = 0; // Sedikit jolt saat kena tabrakan ringan
     this.roadScrollZ = 0;
     this.driverRole = 'local'; // 'local' (left seat drives) or 'remote' (right seat drives)
     this.carLookAngle = 0; // -0.45 (look left), 0 (center), 0.45 (look right)
@@ -4205,16 +4206,23 @@ export class Engine3D {
             this.carSteerX += (autoEvadeX - this.carSteerX) * Math.min(1.0, 10 * dt);
           }
 
-          // 2. MANUAL RUSUH COLLISION: If manual drive hits traffic, cartoony bounce away (NO GORE!)
-          if (!this.isAutoPilot && this.driverRole === 'local' && Math.abs(distZ) < 3.0 && distX < 1.4) {
+          // 2. TABRAKAN RINGAN: kena dikit dibolehkan. Kendaraan yang kena
+          // terpental lucu, kecepatan mobil kita TIDAK dikurangi.
+          if (this.driverRole === 'local' && Math.abs(distZ) < 3.0 && distX < 1.4) {
             t.isBounced = true;
-            // Playful cartoon bounce impulse
+            const soft = this.isAutoPilot;
             t.bounceVelocity.set(
-              (t.group.position.x > carActualX ? 1 : -1) * (14 + Math.random() * 8),
-              12 + Math.random() * 6,
-              -10
+              (t.group.position.x > carActualX ? 1 : -1)
+                * (soft ? 7 + Math.random() * 5 : 14 + Math.random() * 8),
+              soft ? 6 + Math.random() * 4 : 12 + Math.random() * 6,
+              soft ? -6 : -10
             );
-            t.bounceRotation.set(Math.random() * 10, Math.random() * 15, Math.random() * 12);
+            t.bounceRotation.set(
+              Math.random() * (soft ? 6 : 10),
+              Math.random() * (soft ? 8 : 15),
+              Math.random() * (soft ? 6 : 12)
+            );
+            this.carBumpOffset = soft ? 0.09 : 0.16;
             if (this.onCrashBounce) this.onCrashBounce();
           }
         } else {
@@ -4293,6 +4301,15 @@ export class Engine3D {
 
     this.perspectiveCamera.position.set(eyeX, eyeY, eyeZ);
     this.perspectiveCamera.lookAt(targetLookX, targetLookY, targetLookZ);
+
+    // Jolt halus saat kena dikit — biar kerasa tanpa mengubah kecepatan.
+    if (this.carBumpOffset > 0.001) {
+      this.perspectiveCamera.position.y += Math.sin(timestamp * 0.06) * this.carBumpOffset;
+      this.perspectiveCamera.rotation.z += Math.sin(timestamp * 0.04) * this.carBumpOffset * 0.05;
+      this.carBumpOffset *= 0.9;
+    } else {
+      this.carBumpOffset = 0;
+    }
 
     } else {
       // Walking Mode
