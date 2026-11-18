@@ -223,10 +223,20 @@ export class ThaloriaApiClient {
     }
   }
 
-  logout() {
-    this.token = null;
-    this.currentUser = null;
-    localStorage.removeItem('thaloria_jwt_token');
-    localStorage.removeItem('thaloria_user_profile');
+  /** Pastikan room permanen milik akun ini ada di Supabase (teras-akun-<id>). */
+  async ensureRoom(params = {}) {
+    try {
+      const res = await fetch(`${this.authUrl}/api/rooms/ensure`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.token ? { Authorization: `Bearer ${this.token}` } : {})
+        },
+        body: JSON.stringify(params)
+      });
+      return await res.json();
+    } catch {
+      return { success: false, error: 'Gagal menyiapkan room permanen' };
+    }
   }
 }

@@ -169,6 +169,7 @@ export class NetworkManager {
       // Send our initial profile immediately
       conn.send({
         type: 'PROFILE',
+        clientId: this.myClientId,
         ...this.localProfile
       });
 

@@ -874,6 +874,22 @@ body, html {
   background: #ffffff;
 }
 
+/* Kontrol mobil terkunci saat sedang jadi penumpang */
+.drive-action-btn:disabled,
+.throttle-slider:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.drive-action-btn.passenger {
+  background: #f0e7d8;
+  color: var(--ink-muted);
+}
+
+.throttle-slider-container:has(.throttle-slider:disabled) {
+  opacity: 0.55;
+}
+
 #btnSirenToggle.active {
   background: #d90429;
   border-color: #ff4d6d;

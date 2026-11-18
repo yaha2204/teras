@@ -781,7 +781,7 @@ export class Engine3D {
     let touchSteerDir = 0; // -1 for left, 1 for right, 0 for none
 
     window.addEventListener('pointerdown', (e) => {
-      if (!this.isDriving) return;
+      if (!this.isDriving || this.driverRole !== 'local') return;
       if (e.target.closest('button') || e.target.closest('input') || e.target.closest('aside') || e.target.closest('.drive-hud-controls')) {
         return;
       }
@@ -877,6 +877,7 @@ export class Engine3D {
           this.companionGroup.position.set(-0.45, 0.52, 0.82);
         }
       }
+      this.syncCarCompanion();
     }
   }
 
@@ -913,9 +914,21 @@ export class Engine3D {
     this.compKikoController = kikoObj;
   }
 
-  updateCompanionAppearance(hairColor, shirtColor, gender = 'cewe') {
+  updateCompanionAppearance(hairColor, shirtColor, gender = 'cowo') {
     const variant = (gender === 'girl' || gender === 'cewe') ? 'cewe' : 'cowo';
     this.buildCompanionChibi(variant, hairColor, shirtColor);
+  }
+
+  /**
+   * Karakter yang terlihat di dalam mobil selalu memakai profil asli penghuninya.
+   * Tanpa teman online, pakai profil lokal (jadi jenis kelaminnya konsisten
+   * dengan karakter di teras). `peerProfile` dipakai saat teman ikut naik mobil.
+   */
+  syncCarCompanion(peerProfile = null) {
+    const p = peerProfile || this.carPeerProfile || this.localPlayer;
+    if (!p) return;
+    const gender = (p.gender === 'girl' || p.gender === 'cewe') ? 'cewe' : 'cowo';
+    this.updateCompanionAppearance(p.hairColor, p.shirtColor, gender);
   }
 
   setCarLookAngle(angle) {
@@ -3583,8 +3596,10 @@ export class Engine3D {
     this.companionGroup.position.set(0.55, 0.50, 0.65);
     car.add(this.companionGroup);
 
-    // Initial build of default companion (Mira / girl)
-    this.buildCompanionChibi('cewe');
+    // Initial companion mengikuti profil pemain lokal (bukan cewek hardcoded).
+    // Nanti diganti profil teman saat ada peer online di mobil.
+    this.carPeerProfile = null;
+    this.syncCarCompanion();
 
     return car;
   }
@@ -3736,6 +3751,9 @@ export class Engine3D {
         this.localPlayer.mesh.visible = false;
       }
 
+      // Pastikan penumpang di mobil memakai profil asli (gender/warna), bukan default cewek.
+      this.syncCarCompanion();
+
       // True First-Person / Cockpit Perspective Camera!
       this.activeCamera = this.perspectiveCamera;
       const aspect = window.innerWidth / window.innerHeight;
@@ -3777,14 +3795,19 @@ export class Engine3D {
     window.addEventListener('keydown', (e) => {
       if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
 
-      if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
-        this.keysHeld.left = true;
-      } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
-        this.keysHeld.right = true;
-      } else if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
-        this.keysHeld.up = true;
-      } else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
-        this.keysHeld.down = true;
+      // Input menyetir hanya berlaku untuk sopir aktif. Penumpang tidak boleh
+      // mengendalikan mobil (termasuk mobil yang sedang dikendarai teman).
+      const canDrive = !this.isDriving || this.driverRole === 'local';
+      if (canDrive) {
+        if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+          this.keysHeld.left = true;
+        } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+          this.keysHeld.right = true;
+        } else if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
+          this.keysHeld.up = true;
+        } else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
+          this.keysHeld.down = true;
+        }
       }
 
       if (this.isDriving) return;
@@ -4036,7 +4059,10 @@ export class Engine3D {
         const steerSpeed = 2.4; // Units per second
         let inputX = 0;
 
-        if (this.keysHeld) {
+        // Hanya sopir aktif yang input-nya dipakai. Penumpang mengikuti
+        // physics yang disinkronkan dari sopir (CAR_DRIVE_SYNC).
+        const isActiveDriver = this.driverRole === 'local';
+        if (this.keysHeld && isActiveDriver) {
           if (this.keysHeld.left) inputX -= 1;
           if (this.keysHeld.right) inputX += 1;
           if (this.keysHeld.up) {
@@ -4049,7 +4075,7 @@ export class Engine3D {
           }
         }
 
-        if (this.getTouchSteerDir) {
+        if (this.getTouchSteerDir && isActiveDriver) {
           inputX += this.getTouchSteerDir();
         }
 
@@ -4130,7 +4156,7 @@ export class Engine3D {
           const distX = Math.abs(t.group.position.x - carActualX);
 
           // 1. AUTO-PILOT / GUARD MODE: Active radar braking & emergency evasion!
-          if (this.isAutoPilot) {
+          if (this.isAutoPilot && this.driverRole === 'local') {
             // Vehicle detected ahead within 28 meters
             if (distZ < 0 && distZ > -28 && distX < 1.85) {
               // 1a. Decisive lane swerve: steer into the open lane
@@ -4158,7 +4184,7 @@ export class Engine3D {
           }
 
           // 2. MANUAL RUSUH COLLISION: If manual drive hits traffic, cartoony bounce away (NO GORE!)
-          if (!this.isAutoPilot && Math.abs(distZ) < 3.0 && distX < 1.4) {
+          if (!this.isAutoPilot && this.driverRole === 'local' && Math.abs(distZ) < 3.0 && distX < 1.4) {
             t.isBounced = true;
             // Playful cartoon bounce impulse
             t.bounceVelocity.set(

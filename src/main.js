@@ -11,11 +11,33 @@ import { initAuthGate } from './authGate.js?v=20261118akun1';
 window.__SUPABASE_URL = window.__SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL || '';
 window.__SUPABASE_ANON_KEY = window.__SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
+// Room permanen: setiap akun punya SATU room yang melekat pada id akun.
+// Room ini tidak berubah walau browser dibersihkan / dibuka di perangkat lain.
+function getAccountSession() {
+  try {
+    return JSON.parse(localStorage.getItem('thaloria_user_profile') || 'null');
+  } catch {
+    return null;
+  }
+}
+
+function getAccountRoomId() {
+  const account = getAccountSession();
+  if (!account || (!account.id && !account.username)) return null;
+  const key = String(account.id || account.username).replace(/[^a-zA-Z0-9_-]/g, '');
+  return `teras-akun-${key}`;
+}
+
+// Apakah user datang lewat link undangan teman (bukan room default)?
+const hadInviteHash = !!window.location.hash.replace('#', '').trim();
+
 // Setup or Retrieve Room Hash
 function getOrCreateRoomId() {
+  const accountRoom = getAccountRoomId();
   let hash = window.location.hash.replace('#', '').trim();
   if (!hash) {
-    hash = 'terras-' + Math.random().toString(36).substring(2, 7);
+    // Tanpa link undangan, masuk ke room permanen milik akun yang sedang login.
+    hash = accountRoom || 'terras-' + Math.random().toString(36).substring(2, 7);
     window.location.hash = hash;
   }
   return hash;
@@ -79,6 +101,9 @@ window.addEventListener('DOMContentLoaded', () => {
   const currentRoomCodeText = document.getElementById('currentRoomCodeText');
   if (currentRoomCodeText) currentRoomCodeText.textContent = '#' + roomId;
 
+  const myRoomCodeText = document.getElementById('myRoomCodeText');
+  if (myRoomCodeText) myRoomCodeText.textContent = '#' + (getAccountRoomId() || roomId);
+
   // Initialize Canvas 3D Isometric Engine
   const canvas = document.getElementById('gameCanvas');
   const engine = new Engine3D(canvas);
@@ -95,12 +120,32 @@ window.addEventListener('DOMContentLoaded', () => {
     if (!user) return;
     const displayName = user.displayName || user.username;
     profile.name = displayName;
+    if (user.avatarData && user.avatarData.gender) profile.gender = user.avatarData.gender;
+
     engine.localPlayer.name = displayName;
+    engine.localPlayer.gender = profile.gender || 'boy';
     engine.updateAvatarAppearance(engine.localPlayer);
+    engine.syncCarCompanion();
     saveProfile(profile);
+
     const hudName = document.getElementById('hudPlayerName');
     if (hudName) hudName.textContent = displayName;
     showToast(`Selamat datang, ${displayName}! 🌸`);
+
+    // Room permanen: pastikan room akun ada di Supabase & jadikan room aktif
+    // selama user tidak sedang membuka link undangan teman.
+    const accountRoom = `teras-akun-${user.id}`;
+    if (!hadInviteHash && roomId !== accountRoom) {
+      window.location.hash = accountRoom;
+      window.location.reload();
+      return;
+    }
+    Promise.resolve(apiClient.ensureRoom({
+      accountId: user.id,
+      displayName
+    })).then((result) => {
+      if (result && result.success) console.log('🌸 Room permanen siap:', result.roomCode);
+    }).catch(() => {});
   });
 
   // Initialize Pure Audio Controller (No Video, No Iframe Blocks!)
@@ -151,6 +196,9 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // Initialize PeerJS Network
   const voiceStatusEl = document.getElementById('voiceStatus');
+  // peerId -> clientId, dipakai untuk menentukan siapa sopir aktif.
+  const peerClientIds = new Map();
+  let driverClientId = null;
   const network = new NetworkManager(roomId, profile, {
     onPeerJoin: (peerId) => {
       showToast('Temanmu telah bergabung ke teras bunga! 🌸');
@@ -168,6 +216,17 @@ window.addEventListener('DOMContentLoaded', () => {
     },
     onPeerLeave: (peerId) => {
       engine.removeRemotePlayer(peerId);
+      const leftClientId = peerClientIds.get(peerId);
+      peerClientIds.delete(peerId);
+      if (leftClientId && leftClientId === driverClientId) {
+        driverClientId = network.myClientId;
+        applyDriverAuthority();
+        showToast('Teman keluar — setir kembali ke kamu 🚗');
+      }
+      if (!network.connections.size) {
+        engine.carPeerProfile = null;
+        engine.syncCarCompanion();
+      }
       showToast('Temanmu meninggalkan teras.');
       if (voiceStatusEl) voiceStatusEl.textContent = 'Panggilan: Teman Terputus';
       if (menuConnectionStatusText) {
@@ -183,8 +242,19 @@ window.addEventListener('DOMContentLoaded', () => {
         engine.updatePlayerState(peerId, data);
         const hairC = data.hairColor || (data.profile && data.profile.hairColor);
         const shirtC = data.shirtColor || (data.profile && data.profile.shirtColor);
-        const gender = data.gender || (data.profile && data.profile.gender) || 'cewe';
-        engine.updateCompanionAppearance(hairC, shirtC, gender);
+        // Default mengikuti profil lokal, bukan cewek — karakter di mobil
+        // harus konsisten dengan gender asli penghuninya.
+        const gender = data.gender || (data.profile && data.profile.gender)
+          || (engine.localPlayer.gender || 'cowo');
+        const peerProfile = {
+          name: data.name || (data.profile && data.profile.name) || 'Teman',
+          gender,
+          hairColor: hairC || engine.localPlayer.hairColor,
+          shirtColor: shirtC || engine.localPlayer.shirtColor
+        };
+        engine.carPeerProfile = peerProfile;
+        engine.syncCarCompanion(peerProfile);
+        if (data.clientId) peerClientIds.set(peerId, data.clientId);
       } else if (data.type === 'CHAT') {
         appendChatMessage(data.name || 'Teman', data.text, false);
         showToast(`${data.name || 'Teman'}: ${data.text}`);
@@ -192,12 +262,22 @@ window.addEventListener('DOMContentLoaded', () => {
         audioController.syncFromPeer(data.action, data.videoId, data.time);
         updateNowPlayingDisplay(data.videoId);
         updatePlayPauseButton(data.action === 'PLAY');
-      } else if (data.type === 'DRIVER_ROLE') {
-        engine.setDriverRole(data.role === 'local' ? 'remote' : 'local');
-        showToast('Sopir mobil diganti oleh temanmu 🚗');
+      } else if (data.type === 'DRIVER_HANDOFF') {
+        // Hanya sopir aktif yang boleh menyerahkan setir.
+        const senderClientId = peerClientIds.get(peerId) || data.from;
+        const isDriverHandingOver =
+          driverClientId === network.myClientId || driverClientId === senderClientId;
+        if (!data.driverClientId || !isDriverHandingOver) return;
+        driverClientId = data.driverClientId;
+        applyDriverAuthority();
+        showToast(isLocalDriver()
+          ? 'Giliranmu menyetir sekarang! 🚗'
+          : 'Temanmu mengambil giliran menyetir 🚗');
       } else if (data.type === 'CAR_DRIVE_SYNC') {
-        // Synchronize car physics if friend is driving
-        if (engine.driverRole === 'remote') {
+        // Physics mobil hanya diambil dari sopir aktif, bukan dari penumpang.
+        const senderClientId = peerClientIds.get(peerId);
+        if (!isLocalDriver() && data.driverClientId === driverClientId
+            && senderClientId === driverClientId) {
           engine.carSteerX = data.carSteerX;
           if (data.speed) {
             engine.driveSpeed = data.speed;
@@ -255,6 +335,9 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // Awalnya pemain lokal yang pegang setir.
+  driverClientId = network.myClientId;
+
   // Hook Engine Player Action (e.g. Sleeping on Bed)
   engine.onPlayerAction = (action, meta) => {
     if (action === 'SLEEP_BED') {
@@ -274,9 +357,11 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   };
   engine.onCarDriveSync = (carData) => {
+    // Engine hanya memancarkan ini kalau pemain lokal adalah sopir aktif.
     network.broadcast({
       type: 'CAR_DRIVE_SYNC',
-      ...carData
+      ...carData,
+      driverClientId
     });
   };
 
@@ -347,6 +432,11 @@ window.addEventListener('DOMContentLoaded', () => {
   const throttleSpeedLabel = document.getElementById('throttleSpeedLabel');
   if (carThrottleSlider) {
     carThrottleSlider.addEventListener('input', (e) => {
+      if (!isLocalDriver()) {
+        e.target.value = engine.driveSpeed;
+        notifyPassenger();
+        return;
+      }
       const val = parseFloat(e.target.value);
       engine.driveSpeed = val;
       const kmh = Math.round(val * 100);
@@ -373,6 +463,10 @@ window.addEventListener('DOMContentLoaded', () => {
   const btnAutoPilotToggle = document.getElementById('btnAutoPilotToggle');
   if (btnAutoPilotToggle) {
     btnAutoPilotToggle.addEventListener('click', () => {
+      if (!isLocalDriver()) {
+        notifyPassenger();
+        return;
+      }
       engine.isAutoPilot = !engine.isAutoPilot;
       if (engine.isAutoPilot) {
         btnAutoPilotToggle.textContent = '🛡️ Auto-Pilot: ON';
@@ -399,6 +493,10 @@ window.addEventListener('DOMContentLoaded', () => {
   const btnSirenToggle = document.getElementById('btnSirenToggle');
   if (btnSirenToggle) {
     btnSirenToggle.addEventListener('click', () => {
+      if (!isLocalDriver()) {
+        notifyPassenger();
+        return;
+      }
       const isSiren = engine.toggleSirenMode();
       btnSirenToggle.textContent = isSiren ? '🚨 Sirine: ON' : '🚨 Sirine: OFF';
       btnSirenToggle.classList.toggle('active', isSiren);
@@ -470,21 +568,69 @@ window.addEventListener('DOMContentLoaded', () => {
   const btnCarLookCenter = document.getElementById('btnCarLookCenter');
   const btnCarLookRight = document.getElementById('btnCarLookRight');
 
-  let currentDriver = 'local';
+  // Otoritas menyetir: hanya satu sopir aktif. Penumpang tidak bisa mengubah
+  // kecepatan/setir mobil yang sedang dikendarai teman.
+  function isLocalDriver() {
+    return driverClientId === network.myClientId;
+  }
+
+  let lastPassengerNotice = 0;
+  function notifyPassenger() {
+    const now = Date.now();
+    if (now - lastPassengerNotice < 4000) return;
+    lastPassengerNotice = now;
+    showToast('Kamu penumpang — teman yang pegang setir 🚗');
+  }
+
+  function applyDriverAuthority() {
+    const mine = isLocalDriver();
+    engine.setDriverRole(mine ? 'local' : 'remote');
+
+    if (carThrottleSlider) {
+      carThrottleSlider.disabled = !mine;
+      carThrottleSlider.value = engine.driveSpeed;
+    }
+    if (throttleSpeedLabel) {
+      throttleSpeedLabel.textContent = mine
+        ? `${Math.round(engine.driveSpeed * 100)} km/j`
+        : 'Menunggu giliran';
+    }
+    [btnAutoPilotToggle, btnSirenToggle].forEach((button) => {
+      if (button) button.disabled = !mine;
+    });
+    if (btnSwitchDriver) {
+      btnSwitchDriver.textContent = mine
+        ? '🔄 Serahin Setir ke Teman'
+        : '⏳ Teman yang Menyetir';
+      btnSwitchDriver.classList.toggle('passenger', !mine);
+    }
+  }
+
   if (btnSwitchDriver) {
     btnSwitchDriver.addEventListener('click', () => {
-      currentDriver = (currentDriver === 'local') ? 'remote' : 'local';
-      engine.setDriverRole(currentDriver);
-      btnSwitchDriver.textContent = currentDriver === 'local' ? '🔄 Ganti Sopir (Kamu)' : '🔄 Ganti Sopir (Temanmu)';
-      showToast(currentDriver === 'local' ? 'Kamu yang pegang kemudi setir! 🚗' : 'Temanmu yang pegang kemudi setir! 🚗');
-
-      // Broadcast to peer
+      if (!isLocalDriver()) {
+        showToast('Sekarang giliran temanmu. Dia yang bisa menyerahkan setir balik.');
+        return;
+      }
+      const peerIds = [...network.connections.keys()];
+      if (!peerIds.length) {
+        showToast('Ajak teman dulu supaya bisa bergantian menyetir 🌸');
+        return;
+      }
+      const targetPeer = peerIds[0];
+      driverClientId = peerClientIds.get(targetPeer) || targetPeer;
+      applyDriverAuthority();
       network.broadcast({
-        type: 'DRIVER_ROLE',
-        role: currentDriver
+        type: 'DRIVER_HANDOFF',
+        driverClientId,
+        from: network.myClientId
       });
+      showToast('Setir diserahkan ke temanmu — sekarang kamu penumpang 🚗');
     });
   }
+
+  // Terapkan otoritas awal: lokal sebagai sopir.
+  applyDriverAuthority();
 
   function setActiveLookButton(btn) {
     [btnCarLookLeft, btnCarLookCenter, btnCarLookRight].forEach(b => {
@@ -716,6 +862,24 @@ window.addEventListener('DOMContentLoaded', () => {
       window.location.reload();
     }
   });
+
+  // Kembali ke teras permanen milik akun (dari room teman yang sedang dikunjungi)
+  const btnGoMyRoom = document.getElementById('btnGoMyRoom');
+  if (btnGoMyRoom) {
+    btnGoMyRoom.addEventListener('click', () => {
+      const own = getAccountRoomId();
+      if (!own) {
+        showToast('Buat akun dulu untuk punya teras permanen 🌸');
+        return;
+      }
+      if (roomId === own) {
+        showToast('Kamu sudah berada di teras sendiri 🌸');
+        return;
+      }
+      window.location.hash = own;
+      window.location.reload();
+    });
+  }
 
   // Handle Copy Room Code Button inside Menu
   btnCopyRoomCode.addEventListener('click', async () => {
