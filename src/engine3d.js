@@ -652,7 +652,9 @@ export class Engine3D {
     // Camera setup
     const aspect = window.innerWidth / window.innerHeight;
     this.baseFrustumSize = 42;
-    this.interiorScale = 1.55; // Rumah lebih luas dari versi sebelumnya (1.35)
+    this.terraceSize = 36;        // Halaman depan yang lapang
+    this.terraceDoorZ = -10.0;    // Pintu mansion setelah rumah didorong ke belakang
+    this.interiorScale = 1.9;     // Interior lapang (sebelumnya 1.55)
     this.currentZoom = 1.0;
 
     this.camera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 1500);
@@ -1005,8 +1007,8 @@ export class Engine3D {
   /* ================== OUTDOOR FLOWER TERRACE WORLD ================== */
 
   buildFlowerTerrace() {
-    // Grand Extended Floral Island (26x26)
-    const size = 26;
+    // Pulau taman lapang: area tengah sengaja dikosongkan supaya terasa luas.
+    const size = this.terraceSize;
 
     const baseIsland = new THREE.Mesh(
       new THREE.BoxGeometry(size, 2.8, size),
@@ -1024,32 +1026,40 @@ export class Engine3D {
     lawn.receiveShadow = true;
     this.terraceGroup.add(lawn);
 
-    // Large extended front wooden deck
+    // Teras/veranda depan yang lebar, bukan sekadar lantai sempit.
     const deck = new THREE.Mesh(
-      new THREE.BoxGeometry(16, 0.22, 7.5),
+      new THREE.BoxGeometry(24, 0.22, 10),
       new THREE.MeshLambertMaterial({ color: '#b07d56' })
     );
-    deck.position.set(0, 0.16, -4.5);
+    deck.position.set(0, 0.16, -6.5);
     deck.receiveShadow = true;
     this.terraceGroup.add(deck);
 
+    const deckTrim = new THREE.Mesh(
+      new THREE.BoxGeometry(24.6, 0.14, 0.35),
+      new THREE.MeshLambertMaterial({ color: '#d9b382' })
+    );
+    deckTrim.position.set(0, 0.24, -1.5);
+    this.terraceGroup.add(deckTrim);
+
     const stoneMat = new THREE.MeshLambertMaterial({ color: '#d9d0c1' });
-    for (let z = -1; z <= 9; z += 1.4) {
-      const stone = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.08, 1.1), stoneMat);
+    for (let z = -2; z <= 14; z += 1.4) {
+      const stone = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.08, 1.1), stoneMat);
       stone.position.set(0, 0.16, z);
       stone.receiveShadow = true;
       this.terraceGroup.add(stone);
     }
 
-    this.buildCottageBackdrop(0, 0, -8.5);
-    this.buildRoseArch(0, 0, 1.5);
-    this.buildPatioTable(4.8, 0, -4.0);
-    this.buildGardenBench(-5.2, 0, -3.8);
-    this.buildFountainPond(6.5, 0, 4.5);
-    this.buildStoneKoiPondBridge(6.5, 0, 4.5);
-    this.buildGardenGazebo(-7.5, 0, 5.2);
-    this.buildRomanticTreeSwing(-8.0, 0, -3.8);
-    this.buildGardenPicnicSpot(3.6, 0, 7.8);
+    // Rumah didorong ke belakang, furnitur taman dijarangkan ke pinggir.
+    this.buildCottageBackdrop(0, 0, -12.5);
+    this.buildRoseArch(0, 0, 3.5);
+    this.buildPatioTable(8.5, 0, -6.0);
+    this.buildGardenBench(-9.5, 0, -5.5);
+    this.buildFountainPond(11, 0, 8);
+    this.buildStoneKoiPondBridge(11, 0, 8);
+    this.buildGardenGazebo(-12, 0, 9);
+    this.buildRomanticTreeSwing(-13, 0, -5);
+    this.buildGardenPicnicSpot(5, 0, 13);
     this.buildFairyGarlandLights();
     this.populateAbundantFlowers();
   }
@@ -1764,10 +1774,10 @@ export class Engine3D {
 
     // 1. Sunflowers in terracotta pots
     const sunflowerPots = [
-      { x: -5.8, z: -4.8 },
-      { x: -5.8, z: 2.5 },
-      { x: 6.2, z: -4.8 },
-      { x: 6.5, z: 2.2 }
+      { x: -9, z: -8 },
+      { x: -9, z: 5 },
+      { x: 9, z: -8 },
+      { x: 9.5, z: 5 }
     ];
     for (const sp of sunflowerPots) {
       const g = new THREE.Group();
@@ -1794,25 +1804,25 @@ export class Engine3D {
     }
 
     // 2. Lavender Fields (Instanced / Compact flower patches)
-    for (let z = -2; z <= 6; z += 1.8) {
+    for (let z = -4; z <= 10; z += 1.8) {
       const lav1 = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.8, 0.8), lavMat);
-      lav1.position.set(-6.8, 0.4, z);
+      lav1.position.set(-10, 0.4, z);
       this.terraceGroup.add(lav1);
 
       const lav2 = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.8, 0.8), lavMat);
-      lav2.position.set(6.8, 0.4, z);
+      lav2.position.set(10, 0.4, z);
       this.terraceGroup.add(lav2);
     }
 
     // 3. Tulip Flowerbeds
     const tulipColors = ['#f72585', '#ffb703', '#e63946', '#ff758f', '#ffcad4', '#ffd166'];
     const tulipCoords = [
-      { x: -3.5, z: 4.5 },
-      { x: -2.0, z: 5.2 },
-      { x: 2.5, z: 5.2 },
-      { x: 3.8, z: 4.5 },
-      { x: -2.5, z: 1.5 },
-      { x: 2.5, z: 1.5 }
+      { x: -6, z: 8 },
+      { x: -3.5, z: 10 },
+      { x: 3.5, z: 10 },
+      { x: 6, z: 8 },
+      { x: -5, z: 3 },
+      { x: 5, z: 3 }
     ];
     for (let i = 0; i < tulipCoords.length; i++) {
       const c = tulipCoords[i];
@@ -1824,8 +1834,8 @@ export class Engine3D {
     }
 
     // 4. Cherry Blossom Trees
-    this.buildBlossomTree(-6.5, 0, -2.5, '#ffcad4');
-    this.buildBlossomTree(6.5, 0, -2.5, '#f4a6b0');
+    this.buildBlossomTree(-10, 0, -4.5, '#ffcad4');
+    this.buildBlossomTree(10, 0, -4.5, '#f4a6b0');
   }
 
   buildSunflowerPot(x, y, z) {
@@ -3858,9 +3868,10 @@ export class Engine3D {
       }
 
       if (dx !== 0 || dz !== 0) {
-        let minX = -6.5, maxX = 6.5, minZ = -5.0, maxZ = 6.5;
+        let minX = -16, maxX = 16, minZ = -11, maxZ = 16;
         if (this.currentSceneName === 'interior') {
-          minX = -8.5; maxX = 8.5; minZ = -8.5; maxZ = 8.8;
+          minX = -7.5 * this.interiorScale; maxX = 7.5 * this.interiorScale;
+          minZ = -5.5 * this.interiorScale; maxZ = 5.5 * this.interiorScale;
         }
 
         const nextX = Math.max(minX, Math.min(maxX, this.localPlayer.x + dx));
@@ -3942,7 +3953,7 @@ export class Engine3D {
         }
 
         const pt = hit.point;
-        let minX = -6.5, maxX = 6.5, minZ = -5.0, maxZ = 6.5;
+        let minX = -16, maxX = 16, minZ = -11, maxZ = 16;
         if (this.currentSceneName === 'interior') {
           minX = -7.5 * this.interiorScale; maxX = 7.5 * this.interiorScale;
           minZ = -5.5 * this.interiorScale; maxZ = 5.5 * this.interiorScale;
@@ -4003,8 +4014,8 @@ export class Engine3D {
     this.localPlayer.targetZ = z;
 
     if (this.currentSceneName === 'terrace') {
-      if (Math.hypot(x - 0, z - (-4.8)) < 1.4) {
-        this.switchScene('interior', 0, 4.8);
+      if (Math.hypot(x - 0, z - this.terraceDoorZ) < 1.8) {
+        this.switchScene('interior', 0, 7.5);
         return;
       }
     } else if (this.currentSceneName === 'interior') {

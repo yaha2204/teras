@@ -113,7 +113,7 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   function sleepSpot(index) {
-    const S = 1.55; // disamakan dengan engine.interiorScale
+    const S = engine.interiorScale || 1.9; // disamakan dengan skala interior engine
     const jitter = ((Math.floor(index / 2) % 3) - 1) * 0.5;
     if (index % 2 === 0) {
       return { x: 5.8 * S + jitter, z: 3.6 * S, heightY: 1.05 * S, bedLabel: 'Kanan' };
