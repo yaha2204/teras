@@ -1,7 +1,6 @@
 /**
- * Thaloria Dual-Database Client Helper (Local-First with Supabase Cloud Failover)
- * Connects to Local PostgreSQL Backend (Port 3333) primarily;
- * Falls back seamlessly to Supabase Cloud if local server is down or unreachable.
+ * Client penyimpanan ringan. Semua data sensitif hanya diakses lewat endpoint
+ * same-origin (/api/*), tidak pernah lewat koneksi langsung dari browser.
  */
 
 export class ThaloriaApiClient {
@@ -10,14 +9,11 @@ export class ThaloriaApiClient {
       ? 'http://127.0.0.1:3333' 
       : `http://${window.location.hostname}:3333`);
     
-    this.supabaseUrl = options.supabaseUrl || window.__SUPABASE_URL || '';
-    this.supabaseKey = options.supabaseKey || window.__SUPABASE_ANON_KEY || '';
-
-    // Auth selalu lewat endpoint serverless same-origin (/api/auth/*) yang
-    // memakai service_role — anon key tidak boleh menulis ke tabel accounts.
+    // Semua operasi akun/room memakai endpoint same-origin. Tidak ada URL
+    // database maupun kunci API yang disimpan di browser.
     this.authUrl = options.authUrl !== undefined ? options.authUrl : '';
 
-    this.activeMode = 'probing'; // 'local' | 'supabase' | 'probing'
+    this.activeMode = 'probing'; // 'local' | 'offline' | 'probing'
     this.token = localStorage.getItem('thaloria_jwt_token') || null;
     this.currentUser = JSON.parse(localStorage.getItem('thaloria_user_profile') || 'null');
 
@@ -37,33 +33,19 @@ export class ThaloriaApiClient {
 
       if (res.ok) {
         this.activeMode = 'local';
-        console.log(`🌸 [Thaloria API] Connected to LOCAL PRIMARY server: ${this.localUrl}`);
         return 'local';
       }
     } catch {
       // Local server down or network unreachable
     }
 
-    if (this.supabaseUrl && this.supabaseKey) {
-      this.activeMode = 'supabase';
-      console.log(`☁️ [Thaloria API] Local down. Switched to SUPABASE CLOUD fallback: ${this.supabaseUrl}`);
-      return 'supabase';
-    } else {
-      this.activeMode = 'offline';
-      console.warn('⚠️ [Thaloria API] Local backend unreachable & Supabase unconfigured. Running in P2P mesh mode.');
-      return 'offline';
-    }
+    this.activeMode = 'offline';
+    return 'offline';
   }
 
-  getHeaders(useAnonKey = false) {
+  getHeaders() {
     const headers = { 'Content-Type': 'application/json' };
-    if (useAnonKey) {
-      // PostgREST / Supabase Auth menerima kunci anon sebagai apikey + Bearer.
-      headers['apikey'] = this.supabaseKey;
-      headers['Authorization'] = `Bearer ${this.token || this.supabaseKey}`;
-    } else if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`;
-    }
+    if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
     return headers;
   }
 
@@ -163,22 +145,7 @@ export class ThaloriaApiClient {
       return await res.json();
     }
 
-    if (this.activeMode === 'supabase') {
-      try {
-        const cols = 'room_code,room_name,current_scene,music_state,siren_mode,is_private,max_players,updated_at';
-        const res = await fetch(
-          `${this.supabaseUrl}/rest/v1/rooms?room_code=eq.${encodeURIComponent(roomCode)}&select=${cols}`,
-          { headers: this.getHeaders(true) }
-        );
-        const rows = await res.json();
-        if (!res.ok) return { success: false, error: rows.message || 'Gagal membaca Supabase' };
-        return { success: true, room: rows[0] || null };
-      } catch (err) {
-        return { success: false, error: String(err) };
-      }
-    }
-
-    return { success: false, error: 'Server lokal tidak tersedia' };
+    return { success: false, error: 'Server tidak tersedia' };
   }
 
   // 5b. DAFTAR ROOM PUBLIK (via view aman, tanpa password/passcode)
@@ -190,21 +157,7 @@ export class ThaloriaApiClient {
       return await res.json();
     }
 
-    if (this.activeMode === 'supabase') {
-      try {
-        const res = await fetch(
-          `${this.supabaseUrl}/rest/v1/public_rooms?select=*&order=created_at.desc&limit=${Number(limit) || 20}`,
-          { headers: this.getHeaders(true) }
-        );
-        const rows = await res.json();
-        if (!res.ok) return { success: false, error: rows.message || 'Gagal membaca Supabase' };
-        return { success: true, rooms: rows };
-      } catch (err) {
-        return { success: false, error: String(err) };
-      }
-    }
-
-    return { success: false, rooms: [], error: 'Backend tidak tersedia' };
+    return { success: false, rooms: [], error: 'Server tidak tersedia' };
   }
 
   // 5. UPDATE ROOM STATE (Scene, Music, Siren)

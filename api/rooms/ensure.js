@@ -50,6 +50,6 @@ export default async function handler(req, res) {
     return json(res, 200, { success: true, roomCode, permanent: true });
   } catch (err) {
     console.error('[rooms/ensure]', err);
-    return json(res, err.status || 500, { success: false, error: err.message || 'Gagal menyiapkan room' });
+    return json(res, err.status || 500, { success: false, error: 'Gagal menyiapkan room.' });
   }
 }

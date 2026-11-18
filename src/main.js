@@ -7,10 +7,6 @@ import { PureAudioController, parseYouTubeVideoId } from './audioController.js?v
 import { ThaloriaApiClient } from './apiClient.js?v=20261116tidur1';
 import { initAuthGate } from './authGate.js?v=20261118akun1';
 
-// apiClient.js membaca global ini — petakan dari env Vite (Vercel) atau script injection.
-window.__SUPABASE_URL = window.__SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL || '';
-window.__SUPABASE_ANON_KEY = window.__SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-
 // Room permanen: setiap akun punya SATU room yang melekat pada id akun.
 // Room ini tidak berubah walau browser dibersihkan / dibuka di perangkat lain.
 function getAccountSession() {
@@ -88,11 +84,8 @@ window.addEventListener('DOMContentLoaded', () => {
   // Database client: lokal dulu, fallback Supabase. Semua pemanggilan bersifat
   // fire-and-forget supaya game tetap jalan walau backend tidak tersedia.
   const apiClient = new ThaloriaApiClient({
-    localUrl: import.meta.env.VITE_DB_LOCAL_URL || undefined,
-    supabaseUrl: window.__SUPABASE_URL,
-    supabaseKey: window.__SUPABASE_ANON_KEY
+    localUrl: import.meta.env.VITE_DB_LOCAL_URL || undefined
   });
-  window.terasApi = apiClient;
 
   // --- Kehadiran persisten: teman tetap menetap di room walau logout / offline ---
   // Profil penghuni disimpan di server. Saat tidak terhubung P2P, avatarnya

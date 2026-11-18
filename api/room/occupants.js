@@ -39,6 +39,6 @@ export default async function handler(req, res) {
     return json(res, 200, { success: true, occupants });
   } catch (err) {
     console.error('[room/occupants]', err);
-    return json(res, err.status || 500, { success: false, error: err.message || 'Gagal membaca penghuni' });
+    return json(res, err.status || 500, { success: false, error: 'Gagal membaca penghuni.' });
   }
 }

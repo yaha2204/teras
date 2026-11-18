@@ -27,6 +27,6 @@ export default async function handler(req, res) {
     return json(res, 200, { success: true, token: signToken(user), user });
   } catch (err) {
     console.error('[auth/login]', err);
-    return json(res, err.status || 500, { success: false, error: err.message || 'Gagal masuk' });
+    return json(res, err.status || 500, { success: false, error: 'Gagal masuk. Coba lagi.' });
   }
 }

@@ -18,6 +18,6 @@ export default async function handler(req, res) {
     return json(res, 200, { success: true, user: publicUser(row) });
   } catch (err) {
     console.error('[auth/me]', err);
-    return json(res, 500, { success: false, error: err.message || 'Gagal memeriksa sesi' });
+    return json(res, 500, { success: false, error: 'Gagal memeriksa sesi.' });
   }
 }

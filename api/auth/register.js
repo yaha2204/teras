@@ -1,6 +1,6 @@
 import {
   guard, json, readBody, supabase, hashPassword, signToken, publicUser,
-  validateCredentials, SERVICE_KEY
+  validateCredentials
 } from '../_auth.js';
 
 export default async function handler(req, res) {
@@ -39,7 +39,7 @@ export default async function handler(req, res) {
     console.error('[auth/register]', err);
     return json(res, err.status || 500, {
       success: false,
-      error: SERVICE_KEY ? (err.message || 'Gagal membuat akun') : 'Server belum dikonfigurasi'
+      error: 'Gagal membuat akun. Coba lagi.'
     });
   }
 }

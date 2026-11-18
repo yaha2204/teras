@@ -100,10 +100,9 @@ export async function supabase(path, options = {}) {
   let data = null;
   try { data = text ? JSON.parse(text) : null; } catch { data = text; }
   if (!res.ok) {
-    const message = data && data.message ? data.message : `Supabase HTTP ${res.status}`;
-    const err = new Error(message);
+    // Jangan pernah meneruskan pesan mentah layanan data ke response/klien.
+    const err = new Error(`Layanan data error ${res.status}`);
     err.status = res.status;
-    err.data = data;
     throw err;
   }
   return data;

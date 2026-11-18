@@ -63,6 +63,6 @@ export default async function handler(req, res) {
     return json(res, 200, { success: true, roomCode: code, occupants: fresh.length });
   } catch (err) {
     console.error('[room/presence]', err);
-    return json(res, err.status || 500, { success: false, error: err.message || 'Gagal menyimpan kehadiran' });
+    return json(res, err.status || 500, { success: false, error: 'Gagal menyimpan kehadiran.' });
   }
 }
